@@ -9,7 +9,8 @@ graph TD
     B -->|判斷座標 ROI| C{狀態是否有變?}
     C -->|Yes| D[Firebase Realtime Database]
     D -->|Websocket/HTTP| E[Web Frontend - RWD]
-    C -->|No| F[保持原狀]
+C -->|No| F[保持原狀]
+```
 ## 二、 技術棧 (Tech Stack)
 開發語言：Python 3.10+
 
