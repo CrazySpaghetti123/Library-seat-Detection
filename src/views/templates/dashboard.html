@@ -1,0 +1,60 @@
+{% extends "base.html" %}
+{% block title %}使用率報表 - 自習室空位偵測系統{% endblock %}
+{% block nav %}<a class="nav-link d-inline" href="/map">回平面圖</a>{% endblock %}
+{% block content %}
+
+<h5 class="mb-3">校園空間使用率報表（開放時段 {{ open_hour }}:00–{{ close_hour }}:00）</h5>
+
+<form id="query-form" class="row g-2 align-items-end mb-3">
+  <div class="col-6 col-md-3">
+    <label class="form-label" for="start">起始日期</label>
+    <input class="form-control" type="date" id="start" required>
+  </div>
+  <div class="col-6 col-md-3">
+    <label class="form-label" for="end">結束日期</label>
+    <input class="form-control" type="date" id="end" required>
+  </div>
+  <div class="col-6 col-md-2">
+    <label class="form-label" for="floor">樓層</label>
+    <input class="form-control" id="floor" placeholder="全部">
+  </div>
+  <div class="col-6 col-md-4 d-flex gap-2">
+    <button class="btn btn-primary" type="submit">查詢</button>
+    <a class="btn btn-outline-secondary" id="csv-link" href="#">匯出 CSV</a>
+  </div>
+</form>
+
+<div id="no-data" class="alert alert-secondary d-none">該區間無資料</div>
+
+<div class="row g-3">
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header">逐時使用率（結束日期當日）<span id="peak-hour" class="ms-2 badge bg-warning text-dark d-none"></span></div>
+      <div class="card-body"><canvas id="chart-hourly"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header">每日使用率趨勢</div>
+      <div class="card-body"><canvas id="chart-trend"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header">樓層比較（區間平均）</div>
+      <div class="card-body"><canvas id="chart-floors"></canvas></div>
+    </div>
+  </div>
+  <div class="col-12 col-lg-6">
+    <div class="card shadow-sm">
+      <div class="card-header">佔位行為統計</div>
+      <div class="card-body" id="idle-stats">尚未查詢</div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+<script src="/static/js/dashboard.js"></script>
+{% endblock %}

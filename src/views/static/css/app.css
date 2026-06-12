@@ -1,0 +1,41 @@
+/* 座位狀態色票：與 floor-map-web spec 對應 */
+:root {
+  --seat-available: #28a745;   /* 綠：可預約 */
+  --seat-busy: #dc3545;        /* 紅：使用中／已預約 */
+  --seat-away: #fd7e14;        /* 橘：疑似佔位 */
+  --seat-maintenance: #6c757d; /* 灰：維修中 */
+}
+
+.bg-seat-available { background: var(--seat-available); }
+.bg-seat-busy { background: var(--seat-busy); }
+.bg-seat-away { background: var(--seat-away); }
+.bg-seat-maintenance { background: var(--seat-maintenance); }
+
+.legend-dot {
+  display: inline-block;
+  width: 0.9em;
+  height: 0.9em;
+  border-radius: 3px;
+  vertical-align: -0.1em;
+}
+
+#floor-map { max-height: 70vh; }
+
+#floor-map .seat rect {
+  stroke: #333;
+  stroke-width: 1.5;
+  rx: 8;
+}
+#floor-map .seat text {
+  fill: #fff;
+  font-weight: 700;
+  font-size: 18px;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+#floor-map .seat.clickable { cursor: pointer; }
+#floor-map .seat.clickable:hover rect { stroke-width: 3; }
+
+/* 釋放倒數的離席警示橫幅 */
+.away-banner .countdown { font-variant-numeric: tabular-nums; }

@@ -1,0 +1,19 @@
+# Web 後端（FastAPI MVC）
+fastapi>=0.115
+uvicorn[standard]>=0.30
+jinja2>=3.1
+python-multipart>=0.0.9
+itsdangerous>=2.2
+
+# 資料層
+SQLAlchemy>=2.0
+alembic>=1.13
+# PostgreSQL 驅動（開發期用 SQLite 時不需安裝亦可）
+psycopg[binary]>=3.2
+
+# 排程（離席逾時／報到期限）
+APScheduler>=3.10
+
+# 測試
+pytest>=8.0
+httpx>=0.27

@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}登入 - 自習室空位偵測系統{% endblock %}
+{% block content %}
+<div class="row justify-content-center mt-5">
+  <div class="col-12 col-sm-8 col-md-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title mb-3">學號登入</h5>
+        {% if error %}
+        <div class="alert alert-danger py-2">{{ error }}</div>
+        {% endif %}
+        <form method="post" action="/login">
+          <div class="mb-3">
+            <label class="form-label" for="student_id">學號</label>
+            <input class="form-control" id="student_id" name="student_id"
+                   placeholder="例如 B11023001" required autofocus>
+          </div>
+          <button class="btn btn-primary w-100" type="submit">進入系統</button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

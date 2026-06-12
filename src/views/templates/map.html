@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}座位平面圖 - 自習室空位偵測系統{% endblock %}
+{% block nav %}
+<span class="navbar-text me-3">學號：{{ student_id }}</span>
+<a class="nav-link d-inline" href="/logout">登出</a>
+{% endblock %}
+{% block content %}
+
+<!-- 離席提示／系統通知橫幅 -->
+<div id="notification-area"></div>
+
+<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
+  <h5 class="mb-0">自習室平面圖</h5>
+  <span class="badge bg-success fs-6">可預約：<span id="available-count">-</span> 席</span>
+  <span id="ws-status" class="badge bg-secondary">連線中…</span>
+</div>
+
+<!-- 我的座位狀態列 -->
+<div id="my-booking" class="alert alert-info py-2 d-none"></div>
+
+<div class="card shadow-sm">
+  <div class="card-body p-2">
+    <svg id="floor-map" viewBox="0 0 640 360" class="w-100" role="img"
+         aria-label="自習室座位平面圖"></svg>
+  </div>
+  <div class="card-footer small d-flex flex-wrap gap-3">
+    <span><span class="legend-dot bg-seat-available"></span> 可預約</span>
+    <span><span class="legend-dot bg-seat-busy"></span> 使用中／已預約</span>
+    <span><span class="legend-dot bg-seat-away"></span> 疑似佔位</span>
+    <span><span class="legend-dot bg-seat-maintenance"></span> 維修中</span>
+  </div>
+</div>
+
+<!-- 預約確認 Modal -->
+<div class="modal fade" id="reserve-modal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title">預約座位 <span id="reserve-seat-label"></span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        預約後請於 <strong>{{ checkin_deadline_minutes }} 分鐘</strong>內報到，逾期將自動釋放座位。
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
+        <button class="btn btn-primary" id="reserve-confirm">確認預約</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+{% block scripts %}
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="/static/js/map.js"></script>
+{% endblock %}
