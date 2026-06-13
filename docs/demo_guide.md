@@ -56,6 +56,31 @@ uvicorn src.main:app --reload
 > 手機要連的話改用 `uvicorn src.main:app --host 0.0.0.0`，
 > 手機瀏覽器開 `http://電腦IP:8000`（兩台裝置須在同一 Wi-Fi）。
 
+> **本分支（feature/nodejs-socketio-gateway）需另開視窗 1.5 啟動 Node 即時推播閘道**，見下節。
+
+---
+
+## 三之二、啟動 Node.js + Socket.IO 閘道（僅本分支）
+
+本分支的即時推播由獨立的 Node 服務承載，FastAPI 以 HTTP 通知它。
+**視窗 1.5**（首次需先 `npm install`）：
+
+```powershell
+cd node-gateway
+npm install            # 首次安裝（express + socket.io）
+node server.js         # 啟動於 3001 埠，視窗保持開啟
+```
+
+看到「即時推播閘道已啟動：http://0.0.0.0:3001」即成功。前端會自動連到
+`頁面主機:3001`，本機與手機經 IP 連線皆適用（手機需防火牆放行 TCP 3001）。
+
+- 三服務關係：瀏覽器 ─Socket.IO→ Node(3001)；瀏覽器/偵測端 ─HTTP→ FastAPI(8000)；
+  FastAPI 狀態變更 ─HTTP POST→ Node ─Socket.IO→ 瀏覽器。
+- 整合測試（後端＋閘道皆啟動、A1 為 AVAILABLE 時）：
+  `cd node-gateway; npm install; node test_fullchain.mjs` → 應印出 `PASS`。
+- 閘道環境變數：`GATEWAY_PORT`（預設 3001）、`GATEWAY_SECRET`（需與 FastAPI 的
+  `GATEWAY_SECRET` 一致，預設皆為 `dev-gateway-secret`）。
+
 ---
 
 ## 四、展示流程（不需攝影機，用模擬器）

@@ -42,3 +42,8 @@ SCHEDULER_INTERVAL_SECONDS = _int_env("SCHEDULER_INTERVAL_SECONDS", 15)
 # 自習室開放時段（影響使用率報表分母），預設 08:00–22:00
 OPEN_HOUR = _int_env("OPEN_HOUR", 8)
 CLOSE_HOUR = _int_env("CLOSE_HOUR", 22)
+
+# Node.js + Socket.IO 即時推播閘道（feature/nodejs-socketio-gateway 分支）
+# FastAPI 狀態變更時以 HTTP POST 通知此閘道，由閘道經 Socket.IO 推給瀏覽器
+NODE_GATEWAY_URL = os.getenv("NODE_GATEWAY_URL", "http://127.0.0.1:3001")
+GATEWAY_SECRET = os.getenv("GATEWAY_SECRET", "dev-gateway-secret")

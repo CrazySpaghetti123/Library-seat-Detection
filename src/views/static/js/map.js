@@ -12,7 +12,6 @@
   const svg = document.getElementById("floor-map");
   const seats = new Map(); // label -> {data, group}
   let reserveTarget = null;
-  let reconnectDelay = 1000;
 
   const modalEl = document.getElementById("reserve-modal");
   const reserveModal = new bootstrap.Modal(modalEl);
@@ -237,7 +236,7 @@
     notifications.forEach(handleNotification);
   }
 
-  // ---- WebSocket：增量更新＋斷線重連後重抓快照 ----
+  // ---- Socket.IO：增量更新＋（內建）斷線自動重連後重抓快照 ----
 
   async function loadSnapshot() {
     const res = await fetch("/api/seats");
@@ -245,34 +244,36 @@
   }
 
   function connect() {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const sock = new WebSocket(`${proto}://${location.host}/ws/seats`);
     const status = document.getElementById("ws-status");
+    // 連線 Node.js + Socket.IO 閘道；學號經 auth payload 傳入（design D4/D5）
+    const socket = io(window.SEAT_RT.gatewayUrl, {
+      auth: { studentId: window.SEAT_RT.studentId },
+      transports: ["websocket", "polling"], // 優先 WebSocket，受阻時自動降級長輪詢
+    });
 
-    sock.onopen = async () => {
+    // 'connect' 在初次連線與每次自動重連後都會觸發 → 重抓全量快照補償
+    socket.on("connect", async () => {
       status.textContent = "即時連線中";
       status.className = "badge bg-success";
-      reconnectDelay = 1000;
-      await loadSnapshot(); // 重連後補償：重抓全量快照
-    };
-    sock.onmessage = (e) => {
-      const msg = JSON.parse(e.data);
-      if (msg.type === "seat_update") {
-        paint(msg.label, msg.status);
-        updateAvailableCount();
-        if (msg.status !== "AWAY") {
-          clearAwayBanners(msg.seat_id, msg.status);
-        }
-      } else if (msg.type === "notification") {
-        handleNotification(msg.data);
+      await loadSnapshot();
+    });
+
+    socket.on("seat_update", (payload) => {
+      paint(payload.label, payload.status);
+      updateAvailableCount();
+      if (payload.status !== "AWAY") {
+        clearAwayBanners(payload.seat_id, payload.status);
       }
-    };
-    sock.onclose = () => {
+    });
+
+    socket.on("notification", (payload) => {
+      handleNotification(payload.data);
+    });
+
+    socket.on("disconnect", () => {
       status.textContent = "已斷線，重連中…";
       status.className = "badge bg-danger";
-      setTimeout(connect, reconnectDelay);
-      reconnectDelay = Math.min(reconnectDelay * 2, 15000);
-    };
+    });
   }
 
   (async () => {

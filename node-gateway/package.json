@@ -1,0 +1,18 @@
+{
+  "name": "seat-realtime-gateway",
+  "version": "1.0.0",
+  "description": "自習室空位系統的 Node.js + Socket.IO 即時推播閘道（旁掛於 FastAPI）",
+  "type": "module",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "test:e2e": "node test_fullchain.mjs"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "socket.io": "^4.7.5"
+  },
+  "devDependencies": {
+    "socket.io-client": "^4.8.3"
+  }
+}

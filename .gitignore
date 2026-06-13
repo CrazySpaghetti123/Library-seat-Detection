@@ -212,5 +212,5 @@ detection_queue.jsonl
 *.pt
 
 
-# Claude Code 本機設定
+# Claude Code local settings
 .claude/settings.local.json
