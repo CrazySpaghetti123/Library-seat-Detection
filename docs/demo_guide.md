@@ -5,6 +5,33 @@
 
 ---
 
+## 零、兩個分支與切換方式
+
+本專案有兩種即時推播實作，分別在不同 git 分支：
+
+| 分支 | 即時推播技術 | 啟動的服務 |
+|---|---|---|
+| `main` | FastAPI 原生 WebSocket（`/ws/seats`） | 只需 uvicorn（8000） |
+| `feature/nodejs-socketio-gateway` | Node.js + Socket.IO 旁掛閘道 | uvicorn（8000）**＋** node-gateway（3001） |
+
+**切換步驟**（務必先停掉正在跑的服務，再切換）：
+
+```powershell
+# 1. 先在跑 uvicorn / node 的視窗按 Ctrl+C 停止服務
+# 2. 切換分支
+git checkout main                              # 切到原生 WebSocket 版
+git checkout feature/nodejs-socketio-gateway   # 切到 Node + Socket.IO 版
+# 3. 依下方章節重新啟動服務
+```
+
+> 為什麼要先停服務：兩分支的 `src/main.py`、`map.js` 不同。若 uvicorn 是用
+> `--reload` 啟動，切分支會觸發自動重載，可能讓服務進入不一致狀態。停掉再切最乾淨。
+>
+> 切到 `main` 後**不需要**啟動 node-gateway（甚至 3001 沒開也沒關係）；
+> 切到 Node 分支則務必兩個服務都啟動，否則平面圖不會即時更新。
+
+---
+
 ## 一、首次安裝（只需做一次）
 
 ```powershell
