@@ -172,6 +172,7 @@ body {
 .app-navbar .nav-link,
 .app-navbar .navbar-text {
   color: rgba(255, 255, 255, .82);
+  white-space: nowrap;  /* 360px 寬時「登出」曾被拆成上下兩字 */
 }
 .app-navbar .nav-link:hover,
 .app-navbar .nav-link:focus-visible {
@@ -698,6 +699,9 @@ body {
   /* 小螢幕側欄接近全寬，但需留出展開標籤停靠的空間 */
   :root { --app-drawer-width: 80vw; }
   .event-item { padding: var(--app-space-2) var(--app-space-3); }
+  .app-navbar .navbar-brand { font-size: 1.05rem; }
+  /* 收合的直式標籤停靠右緣，小螢幕上平面圖右側讓出標籤寬度，避免蓋住最右一行座位 */
+  .map-stage { padding-right: 2.25rem; }
   /* 行動裝置模糊半徑減半：backdrop-filter 的成本隨半徑與面積上升 */
   :root { --app-glass-blur: 10px; }
 }
