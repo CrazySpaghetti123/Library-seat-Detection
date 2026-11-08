@@ -5,7 +5,7 @@ from sqlalchemy.orm import Session
 
 from src.database import get_db
 from src.models.booking import Booking
-from src.models.seat import Seat, SeatStatus
+from src.models.seat import Seat, SeatStatus, SeatStatusLog
 from src.services.booking_service import BookingService
 from src.services.idle_timeout_service import IdleTimeoutService
 from src.services.notification_service import NotificationService
@@ -49,6 +49,35 @@ def list_seats(db: Session = Depends(get_db)):
     return {
         "seats": [seat_to_dict(s) for s in seats],
         "available_count": sum(1 for s in seats if s.status == SeatStatus.AVAILABLE),
+    }
+
+
+@router.get("/seats/events")
+def list_seat_events(limit: int = 20, db: Session = Depends(get_db)):
+    """近期座位狀態變更，供平面圖事件流載入時填充（新到舊）。
+
+    資料來自 seat_status_logs——即時推播與此處回傳同一組欄位，前端共用渲染邏輯。
+    """
+    limit = max(1, min(limit, 100))  # 夾住上限，避免無界查詢
+    rows = (
+        db.query(SeatStatusLog, Seat.label)
+        .join(Seat, Seat.id == SeatStatusLog.seat_id)
+        .order_by(SeatStatusLog.created_at.desc(), SeatStatusLog.id.desc())
+        .limit(limit)
+        .all()
+    )
+    return {
+        "events": [
+            {
+                "seat_id": log.seat_id,
+                "label": label,
+                "from_status": log.from_status.value,
+                "to_status": log.to_status.value,
+                "source": log.source,
+                "created_at": log.created_at.isoformat(),
+            }
+            for log, label in rows
+        ]
     }
 
 

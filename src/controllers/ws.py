@@ -39,9 +39,11 @@ class ConnectionManager:
 
     # ---- 同步程式碼可呼叫的推播介面（services 掛勾用）----
 
-    def publish_seat_update(self, seat_id: int, label: str, status: str) -> None:
+    def publish_seat_update(self, seat_id: int, label: str, status: str,
+                            from_status: str = "", source: str = "") -> None:
         self._submit({"type": "seat_update", "seat_id": seat_id,
-                      "label": label, "status": status})
+                      "label": label, "status": status,
+                      "from_status": from_status, "source": source})
 
     def publish_notification(self, student_id: str, notification: dict) -> None:
         self._submit({"type": "notification", "data": notification},

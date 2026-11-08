@@ -47,13 +47,15 @@ def test_invalid_transitions_rejected(db, from_status, to_status):
 
 
 def test_transition_hook_invoked(db):
+    """掛勾需帶出 from_status 與 source，供事件流與 seat_status_logs 資訊一致。"""
     calls = []
     SeatStateService.on_transition_hooks.append(
-        lambda seat_id, label, status: calls.append((label, status))
+        lambda seat_id, label, status, from_status, source:
+            calls.append((label, status, from_status, source))
     )
     try:
         seat = make_seat(db, SeatStatus.AVAILABLE)
         SeatStateService.transition(db, seat, SeatStatus.RESERVED, source="booking")
-        assert calls == [(seat.label, "RESERVED")]
+        assert calls == [(seat.label, "RESERVED", "AVAILABLE", "booking")]
     finally:
         SeatStateService.on_transition_hooks.clear()

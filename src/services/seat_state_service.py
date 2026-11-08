@@ -30,9 +30,10 @@ class InvalidTransitionError(ValueError):
 
 
 class SeatStateService:
-    # 轉換後的通知掛勾：fn(seat_id, label, to_status_value)
+    # 轉換後的通知掛勾：fn(seat_id, label, to_status_value, from_status_value, source)
     # main.py 啟動時掛上 WebSocket 廣播；測試可掛假函式驗證
-    on_transition_hooks: list[Callable[[int, str, str], None]] = []
+    # 帶上 from_status 與 source，使即時推播與 seat_status_logs 的資訊一致（事件流用）
+    on_transition_hooks: list[Callable[[int, str, str, str, str], None]] = []
 
     @classmethod
     def transition(cls, db: Session, seat: Seat, to_status: SeatStatus, source: str) -> Seat:
@@ -58,7 +59,7 @@ class SeatStateService:
 
         for hook in cls.on_transition_hooks:
             try:
-                hook(seat.id, seat.label, to_status.value)
+                hook(seat.id, seat.label, to_status.value, from_status.value, source)
             except Exception:  # 廣播失敗不得影響資料寫入
                 pass
         return seat
