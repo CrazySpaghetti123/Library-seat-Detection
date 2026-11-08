@@ -20,6 +20,7 @@ uvicorn src.main:app --reload          # http://127.0.0.1:8000
 - `DATABASE_URL` env var switches DB: default `sqlite:///dev.db`, production `postgresql+psycopg://…`.
 - Detection process (separate machine OK, needs `requirements-detection.txt`): `python -m src.detection.calibrate --seat A1` then `python -m src.detection.detector --source 0 --show`.
 - No camera? `python scripts/simulate_detection.py A1 person_present` replays detection events against the API.
+- Accuracy evaluation on a labelled photo set: `python -m src.detection.calibrate --source <empty photo> --seat A1 A2 A3 B1 B2 B3 --box --out <dir>/rois.json` (`--box`: click 4 desk-top corners + 2 front-leg floor points, ROI = projected cuboid hull) then `python scripts/evaluate_photos.py --photos <dir> --rois <dir>/rois.json` (labels in `<dir>/labels.txt`, template `scripts/eval_shot_plan.txt`). Compares ground-point vs box-centre anchors; outputs go to `eval_output/` (gitignored: contains people).
 - Timer params for demos: set `AWAY_THRESHOLD_MINUTES` / `CONFIRM_WINDOW_MINUTES` / `CHECKIN_DEADLINE_MINUTES` / `VACANT_THRESHOLD_MINUTES` env vars.
 
 ## Testing

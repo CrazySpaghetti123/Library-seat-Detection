@@ -214,3 +214,6 @@ detection_queue.jsonl
 
 # Claude Code local settings
 .claude/settings.local.json
+
+# 照片評估輸出（含人像照片，不進版控）
+eval_output/

@@ -20,19 +20,21 @@ def simple_point_in_polygon(points, point):
 
 
 # ---- classify_seat ----
+# detections 為 (class_id, x1, y1, x2, y2)；判定點由 classify_seat 依類別自行決定
 
 def test_person_in_roi_wins_over_belongings():
-    detections = [(PERSON_CLASS, 50, 50), (next(iter(BELONGING_CLASSES)), 60, 60)]
+    detections = [(PERSON_CLASS, 40, 20, 60, 50),
+                  (next(iter(BELONGING_CLASSES)), 55, 55, 65, 65)]
     assert classify_seat(ROI, detections, simple_point_in_polygon) == RAW_PRESENT
 
 
 def test_belongings_only_marks_idle():
-    detections = [(next(iter(BELONGING_CLASSES)), 50, 50)]
+    detections = [(next(iter(BELONGING_CLASSES)), 45, 45, 55, 55)]
     assert classify_seat(ROI, detections, simple_point_in_polygon) == RAW_BELONGINGS
 
 
 def test_detections_outside_roi_ignored():
-    detections = [(PERSON_CLASS, 500, 500)]
+    detections = [(PERSON_CLASS, 490, 470, 510, 500)]
     assert classify_seat(ROI, detections, simple_point_in_polygon) == RAW_VACANT
 
 
