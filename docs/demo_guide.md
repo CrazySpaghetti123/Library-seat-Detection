@@ -29,7 +29,7 @@ $env:DATABASE_URL = 'postgresql+psycopg://postgres:你的密碼@localhost:5432/s
 
 ```powershell
 alembic upgrade head
-python scripts/seed_seats.py    # 12 席（3F，A1–A6、B1–B6）
+python scripts/seed_seats.py    # 6 席（3F，A1–A3、B1–B3，與照片評估的實拍佈局一致）
 ```
 
 ---
@@ -64,7 +64,7 @@ uvicorn src.main:app --reload
 
 | 步驟 | 操作 | 預期畫面 |
 |---|---|---|
-| 1 | 瀏覽平面圖 | 12 席全綠、「可預約：12 席」 |
+| 1 | 瀏覽平面圖 | 6 席全綠、「可預約：6 席」（B 排在上、A 排在下，即從攝影機方向俯視） |
 | 2 | 點綠色座位 A1 → 確認預約 | A1 變紅，顯示報到期限 |
 | 3 | `python scripts/simulate_detection.py A1 person_present` | 自動報到，「我的預約」變「使用中」 |
 | 4 | `python scripts/simulate_detection.py A1 person_left_belongings` | （開始離席計時，畫面暫無變化） |
@@ -126,7 +126,7 @@ python -m src.detection.detector --source 0 --show --hold 2 --conf 0.25 --model 
 恢復後自動補送。
 
 > 家中單座位測試：`python scripts/_setup_home_seat.py` 會把座位主檔換成單一
-> A1（HOME 樓層、平面圖置中）；要恢復 12 席示範環境見第七節常見問題。
+> A1（HOME 樓層、平面圖置中）；要恢復 6 席示範環境見第七節常見問題。
 
 ---
 
@@ -136,5 +136,5 @@ python -m src.detection.detector --source 0 --show --hold 2 --conf 0.25 --model 
 - **重啟後座位還是紅的**：正常，狀態在資料庫（見「五、測試後重置」）。
 - **主控台中文亂碼**：執行前 `$env:PYTHONIOENCODING='utf-8'`（cp950 主控台限制）。
 - **跑單元測試**：`python -m pytest -q`（測試固定用 in-memory SQLite，不會動到你的資料）。
-- **恢復 12 席示範環境**（單座位測試後）：psql 執行 `TRUNCATE bookings, idle_events, notifications, seat_status_logs; DELETE FROM seats;` 再跑 `python scripts/seed_seats.py`。
+- **恢復 6 席示範環境**（單座位測試後，或從舊版 12 席升級）：直接執行 `python scripts/seed_seats.py --prune` 即可刪掉佈局以外的座位與其紀錄；若要整個重來，psql 執行 `TRUNCATE bookings, idle_events, notifications, seat_status_logs; DELETE FROM seats;` 再跑 `python scripts/seed_seats.py`。
 - **手機連不上**：確認用電腦的區網 IP（`ipconfig` 查）、uvicorn 加 `--host 0.0.0.0`；Windows 防火牆需放行 TCP 8000（公用網路預設封鎖進入連線）。
