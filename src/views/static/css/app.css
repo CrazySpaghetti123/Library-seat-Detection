@@ -1,41 +1,752 @@
-/* 座位狀態色票：與 floor-map-web spec 對應 */
+/* ==========================================================================
+   自習室空位偵測系統 — 設計系統（深色單一主題）
+   spec: floor-map-web（狀態著色語意、非顏色編碼、深色主題、即時事件流）
+   design: changes/ui-design-system/design.md、changes/live-event-stream/design.md
+
+   結構：1) token  2) Bootstrap 覆寫  3) 元件  4) 平面圖  5) 事件流側欄
+         6) 動效  7) RWD  8) 毛玻璃降級
+   ========================================================================== */
+
+/* --------------------------------------------------------------------------
+   1. 設計 token（單一深色主題，故直接定義於 :root）
+   -------------------------------------------------------------------------- */
+
 :root {
-  --seat-available: #28a745;   /* 綠：可預約 */
-  --seat-busy: #dc3545;        /* 紅：使用中／已預約 */
-  --seat-away: #fd7e14;        /* 橘：疑似佔位 */
-  --seat-maintenance: #6c757d; /* 灰：維修中 */
+  /* 品牌與中性色階 */
+  --app-brand: #5a9bd8;
+  --app-brand-strong: #7db3e5;
+  --app-brand-soft: #16283c;
+
+  --app-surface: #161b22;
+  --app-surface-sunken: #0d1117;
+  --app-surface-raised: #1c232c;
+  --app-border: #2b3440;
+  --app-text: #e4e8ee;
+  --app-text-muted: #9aa6b4;
+
+  /* 座位狀態色（spec 規定的綠／紅／橘／灰語意，此處取柔和的淺色調）
+     疑似佔位刻意採琥珀黃而非橘紅——橘與紅的色相太近，
+     兩者是最需要被區分的一組（能不能坐 vs 不能坐） */
+  --seat-available: #2f9c6a;   /* 綠：可預約 */
+  --seat-busy: #cf5a52;        /* 紅：使用中／已預約 */
+  --seat-away: #cfa138;        /* 琥珀：疑似佔位 */
+  --seat-maintenance: #6d7889; /* 灰：維修中 */
+
+  /* 標籤為半透明白：文字本身通透、透出底下的狀態色，
+     邊界靠一道暗描邊維持可辨識 */
+  --seat-label: #ffffff;
+  --seat-label-opacity: .46;
+  /* 狀態圖示需保持清楚（它是顏色以外的狀態編碼），不隨標籤一起淡化 */
+  --seat-icon-opacity: .88;
+
+  /* 座位玻璃化：底板提供可控的合成基底，狀態色疊於其上半透明呈現。 */
+  --seat-glass-base: rgba(255, 255, 255, .16);
+  --seat-fill-opacity: .84;
+
+  /* 座位玻璃面：質感比照對話方塊（.modal-content）——均勻半透明、
+     一道極細亮邊、背景模糊，不用漸層高光 */
+  --seat-blur: 7px;
+  --seat-rim: rgba(255, 255, 255, .12);
+
+  /* 圖表配色（dashboard.js 以 getComputedStyle 讀取） */
+  --app-chart-1: #5a9bd8;
+  --app-chart-2: #3fae74;
+  --app-chart-3: #e07a3f;
+  --app-chart-4: #a98ada;
+  --app-chart-grid: #2b3440;
+  --app-chart-text: #9aa6b4;
+
+  /* 字體：系統字體堆疊，不載入網路字體（design D5） */
+  --app-font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    "Noto Sans TC", "PingFang TC", "Microsoft JhengHei", "Helvetica Neue",
+    Arial, sans-serif;
+
+  /* 間距 */
+  --app-space-1: .25rem;
+  --app-space-2: .5rem;
+  --app-space-3: .75rem;
+  --app-space-4: 1rem;
+  --app-space-5: 1.5rem;
+
+  /* 圓角 */
+  --app-radius-sm: 4px;
+  --app-radius-md: 7px;
+  --app-radius-lg: 10px;
+
+  /* 陰影 */
+  --app-shadow-sm: 0 1px 2px rgba(0, 0, 0, .4);
+  --app-shadow-md: 0 4px 10px rgba(0, 0, 0, .45);
+  --app-shadow-lg: 0 12px 24px rgba(0, 0, 0, .5);
+
+  /* 動效 */
+  --app-transition-fast: 120ms ease;
+  --app-transition-base: 220ms ease;
+  --app-transition-panel: 280ms cubic-bezier(.22, .61, .36, 1);
+
+  /* 毛玻璃：半透明表面 + 背景模糊 + 亮邊。
+     需搭配下方 body 的漸層光暈才看得出效果——backdrop-filter 模糊的是元素
+     背後的內容，若背後為純色則與單純半透明無異。 */
+  --app-glass-bg: rgba(22, 27, 34, .55);
+  --app-glass-bg-strong: rgba(22, 27, 34, .74);
+  --app-glass-border: rgba(255, 255, 255, .10);
+  --app-glass-blur: 16px;
+  --app-glass-saturate: 165%;
+
+  /* body 背景光暈（毛玻璃的取樣來源） */
+  --app-glow-1: rgba(90, 155, 216, .16);
+  --app-glow-2: rgba(63, 174, 116, .11);
+  --app-glow-3: rgba(224, 122, 63, .09);
+
+  /* 事件流側欄 */
+  --app-drawer-width: 22rem;
 }
 
+/* --------------------------------------------------------------------------
+   2. Bootstrap 變數覆寫（讓既有元件自動套用新視覺，design D1）
+   -------------------------------------------------------------------------- */
+
+:root {
+  --bs-primary: var(--app-brand);
+  --bs-primary-rgb: 90, 155, 216;
+  --bs-body-bg: var(--app-surface-sunken);
+  --bs-body-color: var(--app-text);
+  --bs-secondary-color: var(--app-text-muted);
+  --bs-border-color: var(--app-border);
+  --bs-border-radius: var(--app-radius-md);
+  --bs-border-radius-sm: var(--app-radius-sm);
+  --bs-border-radius-lg: var(--app-radius-lg);
+  --bs-font-sans-serif: var(--app-font-sans);
+  --bs-link-color: var(--app-brand);
+  --bs-link-hover-color: var(--app-brand-strong);
+}
+
+body {
+  /* 固定的多層光暈：作為毛玻璃的取樣來源，捲動時玻璃面的透色會隨之變化 */
+  background:
+    radial-gradient(60rem 40rem at 12% 8%, var(--app-glow-1), transparent 60%),
+    radial-gradient(50rem 36rem at 88% 18%, var(--app-glow-2), transparent 58%),
+    radial-gradient(46rem 34rem at 60% 92%, var(--app-glow-3), transparent 60%),
+    var(--app-surface-sunken);
+  background-attachment: fixed;
+  color: var(--app-text);
+  font-family: var(--app-font-sans);
+  min-height: 100vh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 玻璃表面的共用基底 */
+.card,
+.stat-tile,
+.conn-badge,
+.modal-content,
+.alert,
+.app-navbar,
+.stream-panel,
+.stream-toggle {
+  backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+}
+
+/* --------------------------------------------------------------------------
+   3. 元件
+   -------------------------------------------------------------------------- */
+
+/* 導覽列：置頂玻璃條，捲動時內容從其下透出 */
+.app-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1030;
+  background: linear-gradient(
+    to bottom,
+    rgba(16, 21, 28, .82),
+    rgba(16, 21, 28, .62));
+  border-bottom: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-shadow-sm);
+  padding-block: var(--app-space-3);
+}
+.app-navbar .navbar-brand {
+  font-weight: 700;
+  letter-spacing: .01em;
+  color: #fff;
+}
+.app-navbar .nav-link,
+.app-navbar .navbar-text {
+  color: rgba(255, 255, 255, .82);
+}
+.app-navbar .nav-link:hover,
+.app-navbar .nav-link:focus-visible {
+  color: #fff;
+}
+
+/* 卡片 */
+.card {
+  background: var(--app-glass-bg);
+  border: 1px solid var(--app-glass-border);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-md);
+}
+.card-header {
+  background: transparent;
+  border-bottom: 1px solid var(--app-glass-border);
+  font-weight: 600;
+  padding: var(--app-space-3) var(--app-space-4);
+}
+.card-footer {
+  background: transparent;
+  border-top: 1px solid var(--app-glass-border);
+}
+
+/* 數據卡片（可預約席次、報表 KPI） */
+.stat-tile {
+  display: flex;
+  flex-direction: column;
+  gap: var(--app-space-1);
+  min-width: 8.5rem;
+  padding: var(--app-space-3) var(--app-space-4);
+  background: var(--app-glass-bg-strong);
+  border: 1px solid var(--app-glass-border);
+  border-radius: var(--app-radius-md);
+  box-shadow: var(--app-shadow-sm);
+}
+.stat-tile .stat-label {
+  font-size: .8125rem;
+  color: var(--app-text-muted);
+}
+.stat-tile .stat-value {
+  font-size: 1.5rem;
+  font-weight: 700;
+  line-height: 1.1;
+  font-variant-numeric: tabular-nums;
+}
+.stat-tile .stat-value.is-available { color: var(--seat-available); }
+
+/* 連線狀態徽章 */
+.conn-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  padding: var(--app-space-2) var(--app-space-3);
+  border: 1px solid var(--app-glass-border);
+  border-radius: 999px;
+  background: var(--app-glass-bg-strong);
+  font-size: .8125rem;
+  color: var(--app-text-muted);
+}
+.conn-badge .conn-dot {
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: var(--app-text-muted);
+  flex: none;
+}
+.conn-badge.is-online .conn-dot { background: var(--seat-available); }
+.conn-badge.is-online { color: var(--seat-available); }
+.conn-badge.is-offline .conn-dot { background: var(--seat-busy); }
+.conn-badge.is-offline { color: var(--seat-busy); }
+.conn-badge.is-connecting .conn-dot { animation: conn-pulse 1.4s ease-in-out infinite; }
+
+/* 按鈕與表單 */
+.btn { font-weight: 500; }
+.btn-primary {
+  --bs-btn-bg: var(--app-brand);
+  --bs-btn-border-color: var(--app-brand);
+  --bs-btn-hover-bg: var(--app-brand-strong);
+  --bs-btn-hover-border-color: var(--app-brand-strong);
+  --bs-btn-color: #0d1117;
+  --bs-btn-hover-color: #0d1117;
+}
+.form-control,
+.form-select {
+  background: var(--app-glass-bg-strong);
+  border-color: var(--app-glass-border);
+  color: var(--app-text);
+}
+.form-control:focus,
+.form-select:focus {
+  border-color: var(--app-brand);
+  box-shadow: 0 0 0 .2rem rgba(var(--bs-primary-rgb), .18);
+}
+.form-label {
+  font-size: .8125rem;
+  font-weight: 500;
+  color: var(--app-text-muted);
+}
+
+/* 提示橫幅與對話框 */
+.alert {
+  border-radius: var(--app-radius-md);
+  border-width: 1px;
+  box-shadow: var(--app-shadow-sm);
+  background-color: color-mix(in srgb, var(--bs-alert-bg, transparent) 62%, transparent);
+}
+.modal-content {
+  background: var(--app-glass-bg-strong);
+  border: 1px solid var(--app-glass-border);
+  border-radius: var(--app-radius-lg);
+  box-shadow: var(--app-shadow-lg);
+}
+.modal-header,
+.modal-footer { border-color: var(--app-glass-border); }
+.modal-backdrop.show { opacity: .55; }
+
+/* 登入頁 */
+.login-card { max-width: 26rem; margin-inline: auto; }
+.login-card .login-title { font-weight: 700; }
+.login-card .login-subtitle {
+  font-size: .875rem;
+  color: var(--app-text-muted);
+}
+
+/* --------------------------------------------------------------------------
+   4. 平面圖（SVG）
+   -------------------------------------------------------------------------- */
+
+/* 側欄以 fixed 覆蓋而非擠壓版面，故平面圖恆置中、不因開關而重排 */
+.map-stage {
+  max-width: 76rem;
+  margin-inline: auto;
+}
+
+#floor-map {
+  display: block;
+  /* viewBox 高度由 map.js 依列數動態決定，故此處不再限制高度 */
+  width: 100%;
+}
+
+#floor-map .seat rect { rx: 6; }
+
+/* 座位背後不另加地板層，直接透出頁面背景，與周圍維持同一個底 */
+.map-stage .card,
+.map-stage .card-header,
+.map-stage .card-footer {
+  background: transparent;
+}
+
+/* 底板：真正的毛玻璃——模糊其背後的地板層。
+   Chromium／Safari 支援 SVG 元素上的 backdrop-filter；
+   不支援的瀏覽器會退化為單純的半透明白，仍可辨識（見 @supports 降級）。 */
+#floor-map .seat .seat-base {
+  fill: var(--seat-glass-base);
+  stroke: var(--seat-rim);
+  stroke-width: 1;
+  backdrop-filter: blur(var(--seat-blur)) saturate(150%);
+  -webkit-backdrop-filter: blur(var(--seat-blur)) saturate(150%);
+  transition: stroke var(--app-transition-fast),
+              stroke-width var(--app-transition-fast);
+}
+
+/* 狀態色層：均勻半透明填色，無描邊、無漸層 */
+#floor-map .seat .seat-fill {
+  fill-opacity: var(--seat-fill-opacity);
+  stroke: none;
+  transition: fill var(--app-transition-base),
+              fill-opacity var(--app-transition-fast);
+}
+
+/* 標籤：半透明白，透出底下的狀態色；無描邊 */
+#floor-map .seat .seat-label {
+  fill: var(--seat-label);
+  fill-opacity: var(--seat-label-opacity);
+  stroke: none;
+  font-family: var(--app-font-sans);
+  font-weight: 700;
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* 狀態圖示：顏色以外的第二重編碼（spec: Non-Color Status Encoding），
+   故維持較高不透明度，不隨標籤一起淡化 */
+#floor-map .seat .seat-icon {
+  fill: var(--seat-label);
+  fill-opacity: var(--seat-icon-opacity);
+  stroke: none;
+  font-family: var(--app-font-sans);
+  text-anchor: middle;
+  dominant-baseline: central;
+  pointer-events: none;
+}
+
+/* hover 以亮度與亮邊變化表示可點 */
+#floor-map .seat.clickable { cursor: pointer; }
+#floor-map .seat.clickable:hover .seat-fill {
+  fill-opacity: calc(var(--seat-fill-opacity) + .16);
+}
+#floor-map .seat.clickable:hover .seat-base {
+  stroke: rgba(255, 255, 255, .32);
+}
+
+/* 鍵盤焦點需明確可見的指示 */
+#floor-map .seat.clickable:focus-visible { outline: none; }
+#floor-map .seat.clickable:focus-visible .seat-base {
+  stroke: var(--app-brand);
+  stroke-width: 2.5;
+}
+
+/* 狀態剛變更：以填色亮度脈動提示（無邊框可供動畫） */
+#floor-map .seat.just-changed .seat-fill {
+  animation: seat-pulse 900ms ease-out;
+}
+
+/* 圖例：同時呈現顏色與圖示（spec: Legend shows both encodings） */
+.legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--app-space-4);
+  font-size: .8125rem;
+  color: var(--app-text-muted);
+}
+.legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--app-space-2);
+}
+.legend-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  border-radius: var(--app-radius-sm);
+  color: var(--seat-label);
+  font-size: .75rem;
+  line-height: 1;
+  flex: none;
+}
 .bg-seat-available { background: var(--seat-available); }
 .bg-seat-busy { background: var(--seat-busy); }
 .bg-seat-away { background: var(--seat-away); }
 .bg-seat-maintenance { background: var(--seat-maintenance); }
 
-.legend-dot {
-  display: inline-block;
-  width: 0.9em;
-  height: 0.9em;
-  border-radius: 3px;
-  vertical-align: -0.1em;
-}
+/* --------------------------------------------------------------------------
+   4c. 左下角浮出提示（操作回饋）
+   -------------------------------------------------------------------------- */
 
-#floor-map { max-height: 70vh; }
-
-#floor-map .seat rect {
-  stroke: #333;
-  stroke-width: 1.5;
-  rx: 8;
-}
-#floor-map .seat text {
-  fill: #fff;
-  font-weight: 700;
-  font-size: 18px;
-  text-anchor: middle;
-  dominant-baseline: central;
+.toast-area {
+  position: fixed;
+  left: var(--app-space-4);
+  bottom: var(--app-space-4);
+  z-index: 1050;
+  display: flex;
+  flex-direction: column-reverse;  /* 新的在下、靠近視線 */
+  gap: var(--app-space-2);
+  max-width: min(22rem, calc(100vw - 2rem));
   pointer-events: none;
 }
-#floor-map .seat.clickable { cursor: pointer; }
-#floor-map .seat.clickable:hover rect { stroke-width: 3; }
+
+.toast-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--app-space-2);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-glass-border);
+  border-left: 3px solid var(--app-text-muted);
+  border-radius: var(--app-radius-md);
+  background: var(--app-glass-bg-strong);
+  backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+  box-shadow: var(--app-shadow-lg);
+  color: var(--app-text);
+  font-size: .875rem;
+  pointer-events: auto;
+  /* 進場沿用事件流的節奏（design：與即時動態一致的動態語彙） */
+  animation: toast-in 420ms ease-out;
+}
+
+.toast-item.is-success { border-left-color: var(--seat-available); }
+.toast-item.is-warning { border-left-color: var(--seat-away); }
+.toast-item.is-danger { border-left-color: var(--seat-busy); }
+.toast-item.is-info { border-left-color: var(--app-brand); }
+
+.toast-item.is-leaving { animation: toast-out 260ms ease-in forwards; }
 
 /* 釋放倒數的離席警示橫幅 */
-.away-banner .countdown { font-variant-numeric: tabular-nums; }
+.away-banner .countdown {
+  font-variant-numeric: tabular-nums;
+  font-weight: 600;
+}
+
+/* --------------------------------------------------------------------------
+   5. 即時動態側欄（收合式）
+   -------------------------------------------------------------------------- */
+
+/* 直式標籤：收合時停靠右緣、展開時貼到側欄左緣充當收回鈕，
+   兩種狀態下都是同一個可點目標，開關動作對稱且位置可預期 */
+.stream-toggle {
+  position: fixed;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 1045;  /* 高於側欄，展開時仍可點 */
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  padding: var(--app-space-4) var(--app-space-2);
+  border: 1px solid var(--app-glass-border);
+  border-right: none;
+  border-radius: var(--app-radius-md) 0 0 var(--app-radius-md);
+  background: var(--app-glass-bg-strong);
+  color: var(--app-text);
+  box-shadow: var(--app-shadow-md);
+  writing-mode: vertical-rl;
+  font-size: .8125rem;
+  letter-spacing: .05em;
+  transition: right var(--app-transition-panel),
+              background var(--app-transition-fast);
+}
+.stream-toggle:hover,
+.stream-toggle:focus-visible { background: var(--app-surface-raised); }
+.stream-toggle .live-dot { writing-mode: horizontal-tb; }
+
+/* 展開時移至側欄左緣 */
+.stream-toggle.is-open { right: var(--app-drawer-width); }
+
+/* 箭頭指向動作方向：收合時朝左（拉出）、展開時朝右（推回） */
+.stream-toggle .stream-arrow {
+  writing-mode: horizontal-tb;
+  font-size: 1rem;
+  line-height: 1;
+  color: var(--app-text-muted);
+  transition: transform var(--app-transition-panel);
+}
+.stream-toggle.is-open .stream-arrow { transform: rotate(180deg); }
+
+/* 未讀提示：側欄關閉期間有新事件時顯示 */
+.stream-toggle .stream-unread {
+  writing-mode: horizontal-tb;
+  min-width: 1.25rem;
+  padding: 0 .25rem;
+  border-radius: 999px;
+  background: var(--app-brand);
+  color: #0d1117;
+  font-size: .6875rem;
+  font-weight: 700;
+  line-height: 1.25rem;
+  text-align: center;
+}
+.stream-toggle .stream-unread:empty { display: none; }
+
+/* 側欄本體：fixed 覆蓋，不擠壓平面圖版面 */
+.stream-panel {
+  position: fixed;
+  top: 0;
+  right: 0;
+  z-index: 1040;
+  display: flex;
+  flex-direction: column;
+  width: var(--app-drawer-width);
+  max-width: 100vw;
+  height: 100dvh;
+  background: var(--app-glass-bg-strong);
+  border-left: 1px solid var(--app-glass-border);
+  box-shadow: var(--app-shadow-lg);
+  transform: translateX(100%);
+  transition: transform var(--app-transition-panel);
+}
+.stream-panel.is-open { transform: none; }
+
+.stream-panel-header {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  padding: var(--app-space-4);
+  border-bottom: 1px solid var(--app-glass-border);
+  font-weight: 600;
+  flex: none;
+}
+
+/* 標題旁的呼吸圓點，表示串流是活的 */
+.live-dot {
+  width: .5rem;
+  height: .5rem;
+  border-radius: 50%;
+  background: var(--seat-available);
+  flex: none;
+  animation: conn-pulse 2s ease-in-out infinite;
+}
+
+.event-stream {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+.event-item {
+  padding: var(--app-space-3) var(--app-space-4);
+  border-bottom: 1px solid var(--app-glass-border);
+}
+.event-item:last-child { border-bottom: none; }
+
+.event-line {
+  display: flex;
+  align-items: baseline;
+  gap: var(--app-space-2);
+  flex-wrap: wrap;
+}
+.event-seat {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  min-width: 2.25rem;
+}
+.event-transition {
+  display: inline-flex;
+  align-items: baseline;
+  gap: var(--app-space-2);
+  font-size: .875rem;
+}
+.event-from,
+.event-arrow { color: var(--app-text-muted); }
+.event-to { font-weight: 600; }
+
+/* 目標狀態沿用座位狀態色，與平面圖對得起來 */
+.event-to.status-AVAILABLE { color: var(--seat-available); }
+.event-to.status-OCCUPIED,
+.event-to.status-RESERVED { color: var(--seat-busy); }
+.event-to.status-AWAY { color: var(--seat-away); }
+.event-to.status-MAINTENANCE { color: var(--seat-maintenance); }
+
+.event-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--app-space-2);
+  margin-top: var(--app-space-1);
+  font-size: .75rem;
+  color: var(--app-text-muted);
+}
+
+/* 來源標籤：各給色票以便快速掃視 */
+.event-source {
+  padding: .1rem .4rem;
+  border-radius: var(--app-radius-sm);
+  border: 1px solid currentColor;
+  font-size: .6875rem;
+  line-height: 1.4;
+}
+.event-source.src-booking { color: var(--app-brand); }
+.event-source.src-detection { color: var(--seat-available); }
+.event-source.src-timeout { color: var(--seat-away); }
+.event-source.src-admin { color: var(--seat-maintenance); }
+
+.event-time { margin-left: auto; font-variant-numeric: tabular-nums; }
+
+.event-empty {
+  padding: var(--app-space-5) var(--app-space-4);
+  text-align: center;
+  color: var(--app-text-muted);
+  font-size: .875rem;
+}
+
+.event-item.is-new { animation: event-in 420ms ease-out; }
+
+/* --------------------------------------------------------------------------
+   6. 動效（尊重 prefers-reduced-motion，design D6）
+   -------------------------------------------------------------------------- */
+
+@keyframes seat-pulse {
+  0%   { fill-opacity: var(--seat-fill-opacity); }
+  30%  { fill-opacity: 1; }
+  100% { fill-opacity: var(--seat-fill-opacity); }
+}
+
+@keyframes conn-pulse {
+  0%, 100% { opacity: 1; }
+  50%      { opacity: .3; }
+}
+
+@keyframes event-in {
+  from { opacity: 0; transform: translateY(-.5rem); background: var(--app-brand-soft); }
+  to   { opacity: 1; transform: none; background: transparent; }
+}
+
+/* 與 event-in 同一套語彙，只是自下方浮出 */
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(.5rem); }
+  to   { opacity: 1; transform: none; }
+}
+@keyframes toast-out {
+  from { opacity: 1; transform: none; }
+  to   { opacity: 0; transform: translateY(.5rem); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #floor-map .seat .seat-fill { transition: none; }
+  #floor-map .seat.just-changed .seat-fill { animation: none; }
+  .conn-badge.is-connecting .conn-dot { animation: none; }
+  .live-dot { animation: none; }
+  .event-item.is-new { animation: none; }
+  .toast-item,
+  .toast-item.is-leaving { animation: none; }
+  .stream-panel,
+  .stream-toggle { transition: none; }
+}
+
+/* --------------------------------------------------------------------------
+   7. RWD（最小支援寬度 360px，spec: Responsive Layout）
+   -------------------------------------------------------------------------- */
+
+@media (max-width: 575.98px) {
+  .stat-tile {
+    flex: 1 1 auto;
+    min-width: 0;
+    padding: var(--app-space-2) var(--app-space-3);
+  }
+  .stat-tile .stat-value { font-size: 1.25rem; }
+  .legend { gap: var(--app-space-3); }
+  /* 小螢幕側欄接近全寬，但需留出展開標籤停靠的空間 */
+  :root { --app-drawer-width: 80vw; }
+  .event-item { padding: var(--app-space-2) var(--app-space-3); }
+  /* 行動裝置模糊半徑減半：backdrop-filter 的成本隨半徑與面積上升 */
+  :root { --app-glass-blur: 10px; }
+}
+
+/* --------------------------------------------------------------------------
+   8. 毛玻璃降級
+   -------------------------------------------------------------------------- */
+
+/* 瀏覽器不支援 backdrop-filter：改用不透明表面，避免文字疊在背景光暈上難讀 */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .card,
+  .stat-tile,
+  .conn-badge,
+  .modal-content,
+  .stream-panel,
+  .stream-toggle {
+    background: var(--app-surface-raised);
+    border-color: var(--app-border);
+  }
+  .app-navbar { background: var(--app-surface-raised); }
+  .alert { background-color: var(--bs-alert-bg); }
+  /* 座位無法做背景模糊時，提高底板不透明度補回層次 */
+  :root { --seat-glass-base: rgba(255, 255, 255, .26); }
+}
+
+/* 使用者要求降低透明度（系統無障礙設定）：關閉模糊與透明 */
+@media (prefers-reduced-transparency: reduce) {
+  .card,
+  .stat-tile,
+  .conn-badge,
+  .modal-content,
+  .alert,
+  .app-navbar,
+  .stream-panel,
+  .stream-toggle,
+  #floor-map .seat .seat-base {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  :root { --seat-glass-base: rgba(255, 255, 255, .26); }
+  .card,
+  .stat-tile,
+  .conn-badge,
+  .modal-content,
+  .stream-panel,
+  .stream-toggle {
+    background: var(--app-surface-raised);
+    border-color: var(--app-border);
+  }
+  .app-navbar { background: var(--app-surface-raised); }
+  .alert { background-color: var(--bs-alert-bg); }
+}

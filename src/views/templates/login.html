@@ -2,10 +2,11 @@
 {% block title %}登入 - 自習室空位偵測系統{% endblock %}
 {% block content %}
 <div class="row justify-content-center mt-5">
-  <div class="col-12 col-sm-8 col-md-5">
-    <div class="card shadow-sm">
-      <div class="card-body">
-        <h5 class="card-title mb-3">學號登入</h5>
+  <div class="col-12 col-sm-9 col-md-6 col-lg-5">
+    <div class="card login-card">
+      <div class="card-body p-4">
+        <h5 class="login-title mb-1">自習室空位偵測系統</h5>
+        <p class="login-subtitle mb-4">以學號登入即可查看即時座位狀態並預約座位</p>
         {% if error %}
         <div class="alert alert-danger py-2">{{ error }}</div>
         {% endif %}

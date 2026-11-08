@@ -1,35 +1,73 @@
 {% extends "base.html" %}
 {% block title %}座位平面圖 - 自習室空位偵測系統{% endblock %}
 {% block nav %}
-<span class="navbar-text me-3">學號：{{ student_id }}</span>
-<a class="nav-link d-inline" href="/logout">登出</a>
+<span class="navbar-text me-2">學號：{{ student_id }}</span>
+<a class="nav-link" href="/logout">登出</a>
 {% endblock %}
 {% block content %}
 
-<!-- 離席提示／系統通知橫幅 -->
+<!-- 常駐通知（離席警示等需要使用者處理的訊息） -->
 <div id="notification-area"></div>
 
-<div class="d-flex flex-wrap align-items-center gap-3 mb-2">
-  <h5 class="mb-0">自習室平面圖</h5>
-  <span class="badge bg-success fs-6">可預約：<span id="available-count">-</span> 席</span>
-  <span id="ws-status" class="badge bg-secondary">連線中…</span>
+<!-- 操作回饋：左下角浮出的短暫提示 -->
+<div id="toast-area" class="toast-area" aria-live="polite"></div>
+
+<div class="d-flex flex-wrap align-items-center gap-3 mb-3">
+  <h5 class="mb-0 me-auto">自習室平面圖</h5>
+  <div class="stat-tile">
+    <span class="stat-label">目前可預約</span>
+    <span class="stat-value is-available"><span id="available-count">–</span> 席</span>
+  </div>
+  <span id="ws-status" class="conn-badge is-connecting">
+    <span class="conn-dot" aria-hidden="true"></span>
+    <span id="ws-status-text">連線中…</span>
+  </span>
 </div>
 
 <!-- 我的座位狀態列 -->
 <div id="my-booking" class="alert alert-info py-2 d-none"></div>
 
-<div class="card shadow-sm">
-  <div class="card-body p-2">
-    <svg id="floor-map" viewBox="0 0 640 360" class="w-100" role="img"
-         aria-label="自習室座位平面圖"></svg>
-  </div>
-  <div class="card-footer small d-flex flex-wrap gap-3">
-    <span><span class="legend-dot bg-seat-available"></span> 可預約</span>
-    <span><span class="legend-dot bg-seat-busy"></span> 使用中／已預約</span>
-    <span><span class="legend-dot bg-seat-away"></span> 疑似佔位</span>
-    <span><span class="legend-dot bg-seat-maintenance"></span> 維修中</span>
+<div class="map-stage">
+  <div class="card">
+    <div class="card-body p-2">
+      <svg id="floor-map" viewBox="0 0 640 360" class="w-100" role="img"
+           aria-label="自習室座位平面圖"></svg>
+    </div>
+    <div class="card-footer">
+      <div class="legend">
+        <span class="legend-item">
+          <span class="legend-dot bg-seat-available" aria-hidden="true">✓</span> 可預約
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot bg-seat-busy" aria-hidden="true">●</span> 使用中／已預約
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot bg-seat-away" aria-hidden="true">⏱</span> 疑似佔位
+        </span>
+        <span class="legend-item">
+          <span class="legend-dot bg-seat-maintenance" aria-hidden="true">✕</span> 維修中
+        </span>
+      </div>
+    </div>
   </div>
 </div>
+
+<!-- 即時動態：收合式側欄（spec: Live Status Event Stream） -->
+<button id="stream-toggle" class="stream-toggle" type="button"
+        aria-expanded="false" aria-controls="stream-panel">
+  <span class="stream-arrow" aria-hidden="true">‹</span>
+  <span class="live-dot" aria-hidden="true"></span>
+  <span>即時動態</span>
+  <span class="stream-unread" id="stream-unread" aria-hidden="true"></span>
+</button>
+
+<aside id="stream-panel" class="stream-panel" aria-label="座位狀態變更即時動態">
+  <div class="stream-panel-header">
+    <span class="live-dot" aria-hidden="true"></span>
+    <span>即時動態</span>
+  </div>
+  <ul id="event-stream" class="event-stream" aria-live="polite"></ul>
+</aside>
 
 <!-- 預約確認 Modal -->
 <div class="modal fade" id="reserve-modal" tabindex="-1">
