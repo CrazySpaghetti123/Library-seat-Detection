@@ -136,5 +136,5 @@ python -m src.detection.detector --source 0 --show --hold 2 --conf 0.25 --model 
 - **重啟後座位還是紅的**：正常，狀態在資料庫（見「五、測試後重置」）。
 - **主控台中文亂碼**：執行前 `$env:PYTHONIOENCODING='utf-8'`（cp950 主控台限制）。
 - **跑單元測試**：`python -m pytest -q`（測試固定用 in-memory SQLite，不會動到你的資料）。
-- **恢復 6 席示範環境**（單座位測試後，或從舊版 12 席升級）：直接執行 `python scripts/seed_seats.py --prune` 即可刪掉佈局以外的座位與其紀錄；若要整個重來，psql 執行 `TRUNCATE bookings, idle_events, notifications, seat_status_logs; DELETE FROM seats;` 再跑 `python scripts/seed_seats.py`。
+- **恢復 6 席示範環境**（單座位測試後，或從舊版 12 席升級）：執行 `python scripts/seed_seats.py --reset` 清空所有座位與紀錄後重建 6 席；只想刪掉佈局以外的座位、保留其餘紀錄則用 `--prune`。
 - **手機連不上**：確認用電腦的區網 IP（`ipconfig` 查）、uvicorn 加 `--host 0.0.0.0`；Windows 防火牆需放行 TCP 8000（公用網路預設封鎖進入連線）。
