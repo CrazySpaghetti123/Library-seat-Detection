@@ -29,7 +29,7 @@ $env:DATABASE_URL = 'postgresql+psycopg://postgres:你的密碼@localhost:5432/s
 
 ```powershell
 alembic upgrade head
-python scripts/seed_seats.py    # 6 席（3F，A1–A3、B1–B3，與照片評估的實拍佈局一致）
+python scripts/seed_seats.py    # 6 席（樓層「測試教室」，A1–A3、B1–B3，與照片評估的實拍佈局一致）
 ```
 
 ---

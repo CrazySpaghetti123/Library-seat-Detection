@@ -1,4 +1,4 @@
-"""座位主檔 seed：建立示範自習室（3F，A/B 兩排各 3 席，與照片評估的實拍佈局一致）。
+"""座位主檔 seed：建立示範自習室（樓層「測試教室」，A/B 兩排各 3 席，與照片評估的實拍佈局一致）。
 
 執行：python scripts/seed_seats.py [--prune | --reset]
 重複執行安全：已存在的座位（依 label）僅更新樓層與平面圖座標，
@@ -19,11 +19,13 @@ from src.models.idle_event import IdleEvent
 from src.models.notification import Notification
 from src.models.seat import Seat, SeatStatusLog
 
+ROOM = "測試教室"  # seats.floor 欄位：報表依此分組（上限 20 字）
+
 # (label, floor, 平面圖座標 x, y)；map.js 只用座標推導「第幾列第幾行」，像素尺寸由前端重算。
 # 平面圖為從攝影機方向俯視：A 排靠近攝影機畫在下方、B 排在後方畫在上方，1→3 由左到右
 SEATS = [
-    *[(f"B{i}", "3F", 28 + (i - 1) * 98, 92) for i in range(1, 4)],
-    *[(f"A{i}", "3F", 28 + (i - 1) * 98, 192) for i in range(1, 4)],
+    *[(f"B{i}", ROOM, 28 + (i - 1) * 98, 92) for i in range(1, 4)],
+    *[(f"A{i}", ROOM, 28 + (i - 1) * 98, 192) for i in range(1, 4)],
 ]
 
 

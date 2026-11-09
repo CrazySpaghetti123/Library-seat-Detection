@@ -13,7 +13,7 @@ Documentation, comments, and user-facing strings are written in Traditional Chin
 ```
 pip install -r requirements.txt        # web backend
 alembic upgrade head                   # create schema (dev.db by default)
-python scripts/seed_seats.py           # seed demo seats (6 seats A1–A3/B1–B3, 3F; --prune drops seats outside the layout)
+python scripts/seed_seats.py           # seed demo seats (6 seats A1–A3/B1–B3, floor 「測試教室」; --prune drops seats outside the layout)
 uvicorn src.main:app --reload          # http://127.0.0.1:8000
 ```
 
