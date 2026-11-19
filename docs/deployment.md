@@ -35,9 +35,11 @@ python -c "import secrets; print(secrets.token_urlsafe(24))"
    - Region 選 **AWS Asia Pacific (Singapore)**，與 Render 同區，延遲最低。
    - Postgres 版本用預設值即可。
 3. **把運算上限鎖在 0.25 CU**（重要）：
-   - 進入專案 → **Branches** → `main` → Computes → **Edit**。
+   - 左側欄最上方的專案／分支選單確認是預設分支（新專案通常叫 `production`，舊專案可能叫 `main`）→ 點左側欄 **Postgres database ›** 展開子選單 → **Computes** → 運算右側的 **Edit**。
+   - 建立專案後出現的「onboard your agent」是讓 AI 工具連線 Neon 用的，本專案不需要，直接略過。
    - Autoscaling 的最小值與最大值都設為 **0.25 CU**。
-   - Scale to zero（閒置自動暫停）保持開啟，預設 5 分鐘。
+   - Scale to zero（閒置自動暫停）免費方案固定為 5 分鐘，不用調整。
+   - 按 **Save** 後會跳出「Endpoint is updated successfully!」，Computes 頁的 Size 顯示 0.25 CU 即完成。
    - 原因：免費方案每月 100 CU-hours，最大值若維持預設，負載一高用量會放大數倍。
 4. 取得連線字串：專案首頁 → **Connect**。
    - **取消勾選「Connection pooling」**，使用一般連線。主機名稱**不能**有 `-pooler`。
@@ -52,6 +54,8 @@ python -c "import secrets; print(secrets.token_urlsafe(24))"
    alembic upgrade head
    python scripts/seed_seats.py --reset
    ```
+
+   連線字串**一定要用單引號 `'...'` 包起來**（字串裡有 `&`，沒包會出現「不允許使用 & 符號字元」）。`alembic` 輸出應為 `Context impl PostgresqlImpl`；若顯示 `SQLiteImpl`，代表 `DATABASE_URL` 沒設成功，跑到的是本機 dev.db。
 
    看到 `總計 6 席` 即完成。之後若要讓這個視窗回到本機資料庫，關掉視窗重開即可。
 
@@ -112,6 +116,8 @@ python -c "import secrets; print(secrets.token_urlsafe(24))"
   ```
   python scripts/simulate_detection.py A1 person_present --api https://seat-system-xxxx.onrender.com --api-key 偵測端金鑰
   ```
+
+- [ ] 測完把 A1 還原：送 `seat_vacant`。A1 **不會馬上**變回可預約，要等 `VACANT_THRESHOLD_MINUTES`（預設 5 分鐘）確認人和物品都離開才會釋放，這是正常行為。
 
 ---
 
