@@ -46,6 +46,7 @@ $env:AWAY_THRESHOLD_MINUTES   = '0.33'   # 離席 20 秒 → 轉 AWAY 並發提�
 $env:CONFIRM_WINDOW_MINUTES   = '0.33'   # 提示後 20 秒未確認 → 釋放
 $env:VACANT_THRESHOLD_MINUTES = '0.33'   # 人與物品皆離開 20 秒 → 直接釋放
 $env:CHECKIN_DEADLINE_MINUTES = '1'      # 預約後 1 分鐘內要報到
+$env:LEAVE_CHECK_SECONDS      = '30'     # 結束使用後每 30 秒檢查是否已離開（預設即 30）
 $env:SCHEDULER_INTERVAL_SECONDS = '5'    # 排程每 5 秒掃描（預設 15 秒，調短讓觸發更即時）
 
 uvicorn src.main:app --reload
@@ -73,7 +74,10 @@ uvicorn src.main:app --reload
 | 5 | 等約 20–25 秒 | A1 變橘，跳出離席警示橫幅＋「我仍在使用」＋倒數 |
 | 6a | 按「我仍在使用」 | A1 回紅，計時重新開始（會再次提示） |
 | 6b | 或什麼都不做再等約 20–25 秒 | A1 變回綠色，收到「座位已被釋放」通知 |
-| 7 | 開 `http://127.0.0.1:8000/admin.html` | 使用率圖表與佔位統計反映剛剛的活動（本機未設定 `ADMIN_TOKEN` 時不詢問管理密碼） |
+| 7 | 重新預約 A2 並報到，送 `simulate_detection.py A2 person_present`，按「我的座位」列的「結束使用」 | 顯示「收拾中」與倒數，提示「仍偵測到您在座位上」 |
+| 8 | 倒數結束（30 秒） | 人還在，不釋放，重新倒數 30 秒 |
+| 9 | `python scripts/simulate_detection.py A2 seat_vacant` | 下一次檢查時 A2 變回綠色，收到「感謝使用」提示（收拾中可按「繼續使用」反悔） |
+| 10 | 開 `http://127.0.0.1:8000/admin.html` | 使用率圖表與佔位統計反映剛剛的活動（本機未設定 `ADMIN_TOKEN` 時不詢問管理密碼） |
 
 其他可模擬的事件：
 

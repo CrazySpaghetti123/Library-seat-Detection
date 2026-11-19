@@ -109,6 +109,7 @@ AVAILABLE ──預約──▶ RESERVED ──報到(網頁/偵測)──▶ OC
 | `CONFIRM_WINDOW_MINUTES` | 10 | 通知後未按「我仍在使用」→ 釋放回 AVAILABLE |
 | `CHECKIN_DEADLINE_MINUTES` | 30 | 預約後報到期限，逾期自動釋放 |
 | `VACANT_THRESHOLD_MINUTES` | 5 | 人與物品皆離開達此時間 → 直接釋放 |
+| `LEAVE_CHECK_SECONDS` | 30 | 按「結束使用」後每隔此秒數檢查座位最新偵測結果；人與物品皆離開（或該座位沒有偵測資料）才釋放 |
 
 ## 五、 資料庫結構設計
 

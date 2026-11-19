@@ -1,7 +1,7 @@
 """WebSocket 連線管理與端點（spec: floor-map-web / Real-Time Map Updates）。
 
 - /ws/seats：座位狀態廣播頻道（所有開啟平面圖的瀏覽器）
-- 登入學號者於同一連線另收個人通知（away_warning / seat_released / no_show）
+- 登入學號者於同一連線另收個人通知（away_warning / seat_released / no_show / checked_in / checked_out）
 - 瀏覽器無法替 WebSocket 自訂標頭，學生身分以查詢參數 ?token= 帶入；
   沒有或無效的 token 仍可連線收座位廣播，只是收不到個人通知（spec: access-control）
 - 前端每 4 分鐘送一則 ping：Render 免費方案把收到的 WebSocket 訊息計為活動，

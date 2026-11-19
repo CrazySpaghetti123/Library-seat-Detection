@@ -8,7 +8,7 @@ from src.utils import utcnow
 
 
 class Notification(Base):
-    """網頁內通知。type: away_warning / seat_released / no_show"""
+    """網頁內通知。type: away_warning / seat_released / no_show / checked_in / checked_out"""
 
     __tablename__ = "notifications"
 

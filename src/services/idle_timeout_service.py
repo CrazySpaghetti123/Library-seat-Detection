@@ -4,6 +4,7 @@
 - person_left_belongings：人離開、物品仍在 → 建立 away 事件，15 分鐘後轉 AWAY 並提示
 - seat_vacant：人與物品皆離開 → 建立 vacant 事件，5 分鐘後直接釋放
 - person_present：人（重新）出現 → 解除事件；RESERVED 自動報到、AVAILABLE 視為 walk-in
+每個事件也會存成座位的最新偵測結果（seats.last_detection），供「結束使用」判斷是否已離開。
 
 計時錨點（away_started_at / notified_at）持久化於 idle_events，
 由 APScheduler 週期呼叫 sweep()，程序重啟不會遺失計時。
@@ -32,8 +33,15 @@ class IdleTimeoutService:
 
     # ---- 偵測事件入口 ----
 
+    DETECTION_EVENTS = ("person_present", "person_left_belongings", "seat_vacant")
+
     @classmethod
     def handle_detection_event(cls, db: Session, seat: Seat, event: str) -> None:
+        if event not in cls.DETECTION_EVENTS:
+            raise ValueError(f"未知的偵測事件: {event}")
+        # 保存最新偵測結果，不論是否造成狀態改變（spec: seat-detection / Latest Detection Result）
+        seat.last_detection = event
+        seat.last_detection_at = utcnow()
         if event == "person_present":
             cls._on_person_present(db, seat)
         elif event == "person_left_belongings":
@@ -211,6 +219,11 @@ class IdleTimeoutService:
             .filter(IdleEvent.seat_id == seat_id, IdleEvent.resolved_at.is_(None))
             .all()
         )
+
+    @classmethod
+    def resolve_open_events(cls, db: Session, seat_id: int, resolution: str) -> None:
+        """結束該座位所有未解決的離席／淨空事件（供結束使用時呼叫）。"""
+        cls._resolve_open_events(db, seat_id, resolution)
 
     @classmethod
     def _resolve_open_events(cls, db: Session, seat_id: int, resolution: str) -> None:

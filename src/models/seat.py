@@ -34,6 +34,10 @@ class Seat(Base):
     map_y: Mapped[int] = mapped_column(default=0)
     status: Mapped[SeatStatus] = mapped_column(SeatStatusColumn, default=SeatStatus.AVAILABLE)
     updated_at: Mapped[datetime] = mapped_column(DateTime, default=utcnow, onupdate=utcnow)
+    # 最近一次收到的偵測事件（person_present／person_left_belongings／seat_vacant），
+    # 不論是否造成狀態改變都會更新；NULL＝從未收到偵測資料（spec: seat-detection）
+    last_detection: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    last_detection_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
 
 
 class SeatStatusLog(Base):

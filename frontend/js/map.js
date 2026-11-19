@@ -209,10 +209,13 @@
 
   // ---- 我的座位狀態列（報到／取消） ----
 
+  let leaveTimer = null;  // 收拾中倒數
+
   async function refreshMyBooking() {
     const { res, data } = await App.json("/api/me/booking", { student: true });
     if (!res.ok) return;
     const { booking, seat_status } = data;
+    clearTimeout(leaveTimer);
     const box = document.getElementById("my-booking");
     if (!booking) {
       box.classList.add("d-none");
@@ -229,10 +232,47 @@
         bookingAction(booking.id, "checkin");
       document.getElementById("btn-cancel").onclick = () =>
         bookingAction(booking.id, "cancel");
+    } else if (booking.leave_requested_at) {
+      // 收拾中（spec: seat-booking / End of Use）：倒數到下次檢查，歸零後重新讀取結果
+      box.innerHTML = `收拾中：座位 <strong>${booking.seat_label}</strong>，
+        <span id="leave-countdown"></span>
+        <div class="small mt-1">${LEAVE_HINTS[data.last_detection ?? "none"]}</div>
+        <button class="btn btn-sm btn-outline-primary mt-2" id="btn-resume">繼續使用</button>`;
+      document.getElementById("btn-resume").onclick = () =>
+        bookingAction(booking.id, "resume");
+      startLeaveCountdown(new Date(booking.leave_check_at + "Z"));
     } else {
       box.innerHTML = `使用中：座位 <strong>${booking.seat_label}</strong>` +
-        (seat_status === "AWAY" ? "（離席中，請盡快返回或確認）" : "");
+        (seat_status === "AWAY" ? "（離席中，請盡快返回或確認）" : "") +
+        `<button class="btn btn-sm btn-outline-danger ms-2" id="btn-leave">結束使用</button>`;
+      document.getElementById("btn-leave").onclick = () =>
+        bookingAction(booking.id, "leave");
     }
+  }
+
+  const LEAVE_HINTS = {
+    person_present: "目前仍偵測到您在座位上，離開後才會釋放。",
+    person_left_belongings: "座位上仍有物品，請帶走個人物品。",
+    seat_vacant: "已偵測到您離開，檢查後即釋放座位。",
+    none: "此座位沒有偵測資料，倒數結束即釋放。",
+  };
+
+  /** 倒數到下次離開檢查；後端每 5 秒處理一次到期檢查，歸零後稍等再重新讀取。 */
+  function startLeaveCountdown(checkAt) {
+    clearTimeout(leaveTimer);
+    const tick = () => {
+      const el = document.getElementById("leave-countdown");
+      if (!el) return;
+      const remain = Math.ceil((checkAt - Date.now()) / 1000);
+      if (remain > 0) {
+        el.textContent = `${remain} 秒後檢查是否已離開`;
+        leaveTimer = setTimeout(tick, 1000);
+      } else {
+        el.textContent = "檢查中…";
+        leaveTimer = setTimeout(refreshMyBooking, 6000);
+      }
+    };
+    tick();
   }
 
   async function bookingAction(id, action) {
@@ -240,6 +280,8 @@
       method: "POST", student: true,
     });
     if (!res.ok) showBanner("danger", body.detail || "操作失敗");
+    else if (action === "leave") showBanner("info", "已結束使用，請收拾個人物品；確認離開後即釋放座位。");
+    else if (action === "resume") showBanner("success", "已取消結束，座位繼續保留給您。");
     refreshMyBooking();
   }
 
@@ -292,7 +334,7 @@
         if (newStatus === "OCCUPIED") {
           showBanner("success", "已確認您返回座位，釋放倒數已取消。");
         }
-        // 釋放（AVAILABLE）時不另外提示，seat_released 通知會接手顯示
+        // 釋放（AVAILABLE）時不另外提示，seat_released／checked_out 通知會接手顯示
         refreshMyBooking();
       });
   }
@@ -334,6 +376,11 @@
     } else if (note.type === "checked_in") {
       // 偵測自動報到：綠色提示，並更新「我的預約」列（報到期限換成「使用中」）
       showBanner("success", `✅ ${note.payload.message}`);
+      markRead(note.id);
+      refreshMyBooking();
+    } else if (note.type === "checked_out") {
+      // 結束使用後確認離開而釋放：正常結果，綠色短暫提示即可
+      showBanner("success", `👋 ${note.payload.message}`);
       markRead(note.id);
       refreshMyBooking();
     } else {

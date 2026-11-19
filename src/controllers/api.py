@@ -71,6 +71,8 @@ def booking_to_dict(b: Booking, seat_label: str | None = None) -> dict:
         "checked_in_at": b.checked_in_at.isoformat() if b.checked_in_at else None,
         "ended_at": b.ended_at.isoformat() if b.ended_at else None,
         "end_reason": b.end_reason,
+        "leave_requested_at": b.leave_requested_at.isoformat() if b.leave_requested_at else None,
+        "leave_check_at": b.leave_check_at.isoformat() if b.leave_check_at else None,
     }
 
 
@@ -157,7 +159,9 @@ def my_booking(request: Request, db: Session = Depends(get_db)):
         return {"booking": None}
     seat = db.get(Seat, booking.seat_id)
     return {"booking": booking_to_dict(booking, seat_label=seat.label),
-            "seat_status": seat.status.value}
+            "seat_status": seat.status.value,
+            # 結束使用時顯示「仍偵測到您／物品仍在」用；None＝該座位沒有偵測資料
+            "last_detection": seat.last_detection}
 
 
 @router.post("/bookings/{booking_id}/checkin")
@@ -184,6 +188,29 @@ def cancel_booking(booking_id: int, request: Request, db: Session = Depends(get_
         raise HTTPException(status_code=400, detail=str(e))
     db.commit()
     return booking_to_dict(booking)
+
+
+def _booking_op(fn, booking_id: int, student_id: str, db: Session) -> dict:
+    try:
+        booking = fn(db, booking_id, student_id)
+    except PermissionError as e:
+        raise HTTPException(status_code=403, detail=str(e))
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    db.commit()
+    return booking_to_dict(booking)
+
+
+@router.post("/bookings/{booking_id}/leave")
+def leave_seat(booking_id: int, request: Request, db: Session = Depends(get_db)):
+    """結束使用：進入收拾中，定期檢查到離開才釋放（spec: seat-booking / End of Use）。"""
+    return _booking_op(BookingService.request_leave, booking_id, require_student(request), db)
+
+
+@router.post("/bookings/{booking_id}/resume")
+def resume_seat(booking_id: int, request: Request, db: Session = Depends(get_db)):
+    """收拾中按「繼續使用」。"""
+    return _booking_op(BookingService.resume_use, booking_id, require_student(request), db)
 
 
 # ---- 通知 ----

@@ -142,6 +142,78 @@ class BookingService:
         db.flush()
         return len(expired)
 
+    # ---- 結束使用（收拾中，spec: seat-booking / End of Use）----
+
+    @staticmethod
+    def _owned_checked_in(db: Session, booking_id: int, student_id: str) -> Booking:
+        booking = db.get(Booking, booking_id)
+        if not booking or booking.ended_at is not None:
+            raise ValueError("查無有效預約")
+        if booking.student_id != student_id:
+            raise PermissionError("僅能操作自己的座位")
+        if booking.checked_in_at is None:
+            raise ValueError("尚未報到，請使用「取消預約」")
+        return booking
+
+    @classmethod
+    def request_leave(cls, db: Session, booking_id: int, student_id: str) -> Booking:
+        """按下「結束使用」：進入收拾中，LEAVE_CHECK_SECONDS 後第一次檢查。"""
+        booking = cls._owned_checked_in(db, booking_id, student_id)
+        if booking.leave_requested_at is not None:
+            raise ValueError("已在結束使用中")
+        now = utcnow()
+        booking.leave_requested_at = now
+        booking.leave_check_at = now + timedelta(seconds=config.LEAVE_CHECK_SECONDS)
+        db.flush()
+        return booking
+
+    @classmethod
+    def resume_use(cls, db: Session, booking_id: int, student_id: str) -> Booking:
+        """收拾中按「繼續使用」：取消結束。"""
+        booking = cls._owned_checked_in(db, booking_id, student_id)
+        if booking.leave_requested_at is None:
+            raise ValueError("目前沒有在結束使用中")
+        booking.leave_requested_at = None
+        booking.leave_check_at = None
+        db.flush()
+        return booking
+
+    @classmethod
+    def process_leave_checks(cls, db: Session) -> dict:
+        """到期的收拾中檢查（排程週期呼叫）：已離開或無偵測資料 → 釋放；否則延後再查。"""
+        # 避免循環匯入：IdleTimeoutService 依賴 BookingService
+        from src.services.idle_timeout_service import IdleTimeoutService
+
+        now = utcnow()
+        stats = {"leave_released": 0, "leave_postponed": 0}
+        due = (
+            db.query(Booking)
+            .filter(
+                Booking.ended_at.is_(None),
+                Booking.leave_requested_at.isnot(None),
+                Booking.leave_check_at <= now,
+            )
+            .all()
+        )
+        for booking in due:
+            seat = db.get(Seat, booking.seat_id)
+            if seat.last_detection in (None, "seat_vacant"):
+                IdleTimeoutService.resolve_open_events(db, seat.id, resolution="checked_out")
+                if seat.status in (SeatStatus.OCCUPIED, SeatStatus.AWAY):
+                    SeatStateService.transition(db, seat, SeatStatus.AVAILABLE, source="booking")
+                cls.end_booking(db, booking, reason="checked_out")
+                NotificationService.notify(
+                    db, booking.student_id, type="checked_out", seat_id=seat.id,
+                    payload={"seat_label": seat.label,
+                             "message": f"已確認您離開，座位 {seat.label} 已釋放，感謝使用"},
+                )
+                stats["leave_released"] += 1
+            else:
+                booking.leave_check_at = now + timedelta(seconds=config.LEAVE_CHECK_SECONDS)
+                stats["leave_postponed"] += 1
+        db.flush()
+        return stats
+
     # ---- 結束（逾時釋放等情境由 IdleTimeoutService 呼叫）----
 
     @staticmethod

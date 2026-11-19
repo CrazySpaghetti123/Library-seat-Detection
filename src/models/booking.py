@@ -24,3 +24,6 @@ class Booking(Base):
     checked_in_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     ended_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     end_reason: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    # 結束使用（收拾中）：按下結束的時間與下次檢查時間；NULL＝未在收拾中
+    leave_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    leave_check_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
