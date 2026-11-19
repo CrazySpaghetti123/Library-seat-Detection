@@ -10,7 +10,8 @@
 - 按 s 儲存並換下一席、r 重新點選、q 離開
 - 預設寫入後端 seats.roi；指定 --out 時改存成本機 JSON（不需後端，供照片評估用）
 - 加 --box 為立體框選：依序點桌面遠左、遠右、近右、近左四角，再點近左、近右桌腳落地點，
-  ROI 取整個桌子長方體在畫面上的外輪廓（斜視角下比四邊形貼合）
+  ROI 取整個桌子長方體在畫面上的外輪廓（斜視角下比四邊形貼合），並另存桌面供偵測端桌面優先判定；
+  可直接寫入後端，也可搭配 --out
 - 其他座位已標定的 ROI 以灰色顯示、本座位的舊 ROI 以淡藍色顯示，避免框選範圍互相重疊
 
 手機照片的解析度通常遠大於螢幕，畫面會縮小顯示；
@@ -42,22 +43,26 @@ def to_display(point, scale: float) -> tuple[int, int]:
     return (round(point[0] * scale), round(point[1] * scale))
 
 
-def save_roi(api_base: str, seat_label: str, points: list[list[int]]) -> bool:
+def save_roi(api_base: str, seat_label: str, roi) -> bool:
+    """寫入後端。roi 為四點 list，或立體框選的 {"points", "top", "floor"}（原樣送出）。"""
     import httpx
 
-    res = httpx.put(
-        f"{api_base.rstrip('/')}/api/seats/{seat_label}/roi",
-        json={"points": points}, timeout=10.0,
-    )
+    body = roi if isinstance(roi, dict) else {"points": roi}
+    try:
+        res = httpx.put(f"{api_base.rstrip('/')}/api/seats/{seat_label}/roi",
+                        json=body, timeout=10.0)
+    except httpx.HTTPError as exc:
+        logger.error("無法連線後端（%s），可改用 --out 先存成 JSON", exc)
+        return False
     if res.status_code == 200:
-        logger.info("座位 %s 的 ROI 已儲存: %s", seat_label, points)
+        logger.info("座位 %s 的 ROI 已儲存: %s", seat_label, body)
         return True
     logger.error("儲存失敗（%s）: %s", res.status_code, res.text)
     return False
 
 
-def fetch_existing_rois(api_base: str) -> dict[str, list]:
-    """取得已標定的 ROI 作為框選參考；後端連不上時回傳空字典，不影響標定。"""
+def fetch_existing_rois(api_base: str) -> dict:
+    """取得已標定的 ROI（保留完整結構）作為框選參考；後端連不上時回傳空字典，不影響標定。"""
     import httpx
 
     try:
@@ -66,7 +71,7 @@ def fetch_existing_rois(api_base: str) -> dict[str, list]:
     except httpx.HTTPError as exc:
         logger.warning("無法取得既有 ROI（%s），僅顯示畫面", exc)
         return {}
-    return {s["label"]: s["roi"]["points"] for s in res.json()["seats"]
+    return {s["label"]: s["roi"] for s in res.json()["seats"]
             if s.get("roi") and s["roi"].get("points")}
 
 
@@ -230,10 +235,9 @@ def main() -> None:
     parser.add_argument("--api", default="http://127.0.0.1:8000", help="後端 API 位址")
     parser.add_argument("--out", help="改存成本機 JSON 檔（不需啟動後端）")
     parser.add_argument("--box", action="store_true",
-                        help="立體框選：點桌面四角 + 兩支前腳落地點，ROI 取長方體外輪廓（需搭配 --out）")
+                        help="立體框選：點桌面四角 + 兩支前腳落地點，ROI 取長方體外輪廓並保存桌面"
+                             "（偵測端桌面優先判定使用）")
     args = parser.parse_args()
-    if args.box and not args.out:
-        parser.error("--box 產生的多邊形超過四點，後端 API 目前只接受四點，請搭配 --out 存成 JSON")
 
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")

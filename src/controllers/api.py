@@ -173,18 +173,40 @@ def mark_notification_read(notification_id: int, request: Request,
 # ---- ROI 標定（spec: seat-detection / ROI Seat Calibration）----
 
 class RoiRequest(BaseModel):
-    points: list[list[int]]  # 四點座標 [[x,y] x4]
+    """座位 ROI。四點標定只有 points；立體框選另帶桌面與地板投影（格式同 calibrate.box_record）。"""
+    points: list[list[int]]              # 外輪廓多邊形 [[x,y], ...]
+    top: list[list[int]] | None = None    # 桌面四角
+    floor: list[list[int]] | None = None  # 桌腳落地的投影四角（由桌面推算，需搭配 top）
+
+
+ROI_MIN_POINTS, ROI_MAX_POINTS = 3, 16  # 凸包最多 8 點，上限留給手動多邊形
+
+
+def _roi_error(body: RoiRequest) -> str | None:
+    """只驗證結構（design D2）；幾何是否合理由標定工具負責。"""
+    if not ROI_MIN_POINTS <= len(body.points) <= ROI_MAX_POINTS:
+        return f"外輪廓需為 {ROI_MIN_POINTS}～{ROI_MAX_POINTS} 點"
+    for name, pts in (("桌面", body.top), ("地板投影", body.floor)):
+        if pts is not None and len(pts) != 4:
+            return f"{name}需為四點座標"
+    if body.floor is not None and body.top is None:
+        return "地板投影需與桌面一併提供"
+    for pts in (body.points, body.top or [], body.floor or []):
+        if any(len(p) != 2 or p[0] < 0 or p[1] < 0 for p in pts):
+            return "座標需為非負整數 [x, y]"
+    return None
 
 
 @router.put("/seats/{seat_label}/roi")
 def set_seat_roi(seat_label: str, body: RoiRequest, db: Session = Depends(get_db)):
     """標定工具寫入座位 ROI。正式部署時應加上管理者驗證。"""
-    if len(body.points) != 4:
-        raise HTTPException(status_code=400, detail="ROI 需為四點座標")
+    error = _roi_error(body)
+    if error:
+        raise HTTPException(status_code=400, detail=error)
     seat = db.query(Seat).filter(Seat.label == seat_label).first()
     if not seat:
         raise HTTPException(status_code=404, detail="座位不存在")
-    seat.roi = {"points": body.points}
+    seat.roi = body.model_dump(exclude_none=True)
     db.commit()
     return {"ok": True, "seat": seat_to_dict(seat)}
 
