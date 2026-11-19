@@ -96,7 +96,10 @@
   });
 
   // 預設帶入今日
-  const today = new Date().toISOString().slice(0, 10);
+  // 用瀏覽器當地日期（toISOString 為 UTC，台灣凌晨 0～8 點會變成前一天）
+  const now = new Date();
+  const today = [now.getFullYear(), String(now.getMonth() + 1).padStart(2, "0"),
+                 String(now.getDate()).padStart(2, "0")].join("-");
   document.getElementById("start").value = today;
   document.getElementById("end").value = today;
   document.getElementById("query-form").requestSubmit();

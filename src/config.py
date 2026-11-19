@@ -39,6 +39,9 @@ VACANT_THRESHOLD_MINUTES = _float_env("VACANT_THRESHOLD_MINUTES", 5)
 # 逾時排程掃描間隔（秒）：計時錨點存於 DB，掃描週期只影響觸發精度
 SCHEDULER_INTERVAL_SECONDS = _int_env("SCHEDULER_INTERVAL_SECONDS", 15)
 
-# 自習室開放時段（影響使用率報表分母），預設 08:00–22:00
+# 當地時區（IANA 名稱）：DB 一律存 naive UTC，報表的日期、開館時段與逐時分組以此時區計算
+TIMEZONE = os.getenv("TIMEZONE", "Asia/Taipei")
+
+# 自習室開放時段（當地時間，影響使用率報表分母），預設 08:00–22:00
 OPEN_HOUR = _int_env("OPEN_HOUR", 8)
 CLOSE_HOUR = _int_env("CLOSE_HOUR", 22)

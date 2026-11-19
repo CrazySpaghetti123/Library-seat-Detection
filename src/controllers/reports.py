@@ -1,12 +1,12 @@
 """報表 API（spec: usage-report / Report Dashboard and Export）。"""
-from datetime import date, datetime, time
+from datetime import date
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from src.database import get_db
-from src.services.report_service import ReportService
+from src.services.report_service import ReportService, local_day_bounds
 
 router = APIRouter(prefix="/api/reports")
 
@@ -37,11 +37,8 @@ def floors(start: str, end: str, db: Session = Depends(get_db)):
 
 @router.get("/idle")
 def idle(start: str, end: str, db: Session = Depends(get_db)):
-    return ReportService.idle_stats(
-        db,
-        datetime.combine(_parse_date(start), time.min),
-        datetime.combine(_parse_date(end), time.max),
-    )
+    # 查詢日期為當地日期，換算成 UTC 日界（spec: Day boundary follows local time）
+    return ReportService.idle_stats(db, *local_day_bounds(_parse_date(start), _parse_date(end)))
 
 
 @router.get("/usage.csv")

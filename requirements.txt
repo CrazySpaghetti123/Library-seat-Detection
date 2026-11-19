@@ -11,6 +11,9 @@ alembic>=1.13
 # PostgreSQL 驅動（開發期用 SQLite 時不需安裝亦可）
 psycopg[binary]>=3.2
 
+# 時區資料（Windows 沒有系統時區資料庫；報表以當地時間計算）
+tzdata>=2024.1
+
 # 排程（離席逾時／報到期限）
 APScheduler>=3.10
 

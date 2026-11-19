@@ -3,9 +3,13 @@
 唯一資料來源為 seat_status_logs：由狀態轉換紀錄重建每個座位的
 狀態區間，再切分至小時桶累計。
 使用率 =（OCCUPIED + RESERVED + AWAY 的座位秒數）÷（座位數 × 開放秒數）。
+
+時間：DB 存 naive UTC；查詢日期、開館時段與小時桶皆以 config.TIMEZONE 的當地時間計算，
+只在邊界換算（spec: usage-report / Hours follow local time）。
 """
 from collections import defaultdict
-from datetime import date, datetime, time, timedelta
+from datetime import date, datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.orm import Session
 
@@ -14,6 +18,32 @@ from src.models.idle_event import IdleEvent
 from src.models.seat import Seat, SeatStatus, SeatStatusLog
 
 BUSY_STATUSES = {SeatStatus.OCCUPIED, SeatStatus.RESERVED, SeatStatus.AWAY}
+
+
+def _tz() -> ZoneInfo:
+    return ZoneInfo(config.TIMEZONE)  # 每次讀取設定，測試可切換時區
+
+
+def local_to_utc(local: datetime) -> datetime:
+    """當地 naive 時間 → naive UTC（DB 比較用）。"""
+    return local.replace(tzinfo=_tz()).astimezone(timezone.utc).replace(tzinfo=None)
+
+
+def utc_to_local(utc: datetime) -> datetime:
+    """naive UTC → 當地 naive 時間（分組用）。"""
+    return utc.replace(tzinfo=timezone.utc).astimezone(_tz()).replace(tzinfo=None)
+
+
+def local_day_bounds(start_day: date, end_day: date) -> tuple[datetime, datetime]:
+    """當地日期區間（含首尾兩日整天）→ naive UTC 起訖。"""
+    return (local_to_utc(datetime.combine(start_day, time.min)),
+            local_to_utc(datetime.combine(end_day, time.max)))
+
+
+def _open_window(day: date) -> tuple[datetime, datetime]:
+    """當地開館時段 → naive UTC 起訖。"""
+    return (local_to_utc(datetime.combine(day, time(config.OPEN_HOUR))),
+            local_to_utc(datetime.combine(day, time(config.CLOSE_HOUR))))
 
 
 class ReportService:
@@ -30,7 +60,7 @@ class ReportService:
     @classmethod
     def _busy_seconds_by_hour(cls, db: Session, start: datetime, end: datetime,
                               floor: str | None) -> tuple[dict[datetime, float], int, bool]:
-        """回傳（{小時桶起點: 忙碌秒數}, 座位數, 區間內是否有任何紀錄）。"""
+        """start／end 為 naive UTC；回傳（{當地小時桶起點: 忙碌秒數}, 座位數, 區間內是否有任何紀錄）。"""
         seat_ids = cls._seat_ids(db, floor)
         if not seat_ids:
             return {}, 0, False
@@ -63,11 +93,14 @@ class ReportService:
 
     @staticmethod
     def _accumulate(buckets: dict[datetime, float], t0: datetime, t1: datetime) -> None:
-        """將忙碌區間 [t0, t1) 切分進各小時桶。"""
+        """將忙碌區間 [t0, t1)（naive UTC）切分進當地整點的小時桶。
+
+        桶鍵為當地 naive 時間；桶的結束點換回 UTC 比較，非整點偏移的時區也對齊當地整點。
+        """
         cursor = t0
         while cursor < t1:
-            bucket = cursor.replace(minute=0, second=0, microsecond=0)
-            bucket_end = bucket + timedelta(hours=1)
+            bucket = utc_to_local(cursor).replace(minute=0, second=0, microsecond=0)
+            bucket_end = local_to_utc(bucket + timedelta(hours=1))
             seg_end = min(t1, bucket_end)
             buckets[bucket] += (seg_end - cursor).total_seconds()
             cursor = seg_end
@@ -76,9 +109,8 @@ class ReportService:
 
     @classmethod
     def hourly_usage(cls, db: Session, day: date, floor: str | None = None) -> dict:
-        """某日開放時段的逐時使用率與尖峰時段。"""
-        start = datetime.combine(day, time(config.OPEN_HOUR))
-        end = datetime.combine(day, time(config.CLOSE_HOUR))
+        """某日（當地）開放時段的逐時使用率與尖峰時段，小時為當地時間。"""
+        start, end = _open_window(day)
         buckets, seat_count, has_data = cls._busy_seconds_by_hour(db, start, end, floor)
 
         hourly = []
@@ -102,8 +134,7 @@ class ReportService:
         days = []
         cursor = start_day
         while cursor <= end_day:
-            start = datetime.combine(cursor, time(config.OPEN_HOUR))
-            end = datetime.combine(cursor, time(config.CLOSE_HOUR))
+            start, end = _open_window(cursor)
             buckets, seat_count, _ = cls._busy_seconds_by_hour(db, start, end, floor)
             denominator = seat_count * (config.CLOSE_HOUR - config.OPEN_HOUR) * 3600
             rate = (sum(buckets.values()) / denominator * 100) if denominator else 0.0
@@ -126,6 +157,7 @@ class ReportService:
 
     @classmethod
     def idle_stats(cls, db: Session, start: datetime, end: datetime) -> dict:
+        """start／end 為 naive UTC；以當地日期查詢時用 local_day_bounds() 換算。"""
         events = (
             db.query(IdleEvent)
             .filter(IdleEvent.resolution == "released",
@@ -164,11 +196,7 @@ class ReportService:
             for row in report["hourly"]:
                 lines.append(f"{cursor.isoformat()},{row['hour']},{row['rate']}")
             cursor += timedelta(days=1)
-        idle = cls.idle_stats(
-            db,
-            datetime.combine(start_day, time.min),
-            datetime.combine(end_day, time.max),
-        )
+        idle = cls.idle_stats(db, *local_day_bounds(start_day, end_day))
         lines.append("")
         lines.append("idle_released_count,avg_away_minutes")
         lines.append(f"{idle['released_count']},{idle['avg_away_minutes']}")
