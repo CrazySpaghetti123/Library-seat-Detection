@@ -467,6 +467,28 @@ body {
   font-weight: 600;
 }
 
+/* 後端喚醒提示（js/api.js）：持續性狀態，置於導覽列下方，質感同 toast */
+.wake-banner {
+  position: fixed;
+  top: 4.5rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1060;
+  max-width: calc(100vw - 2rem);
+  padding: var(--app-space-3) var(--app-space-4);
+  border: 1px solid var(--app-glass-border);
+  border-left: 3px solid var(--seat-away);
+  border-radius: var(--app-radius-md);
+  background: var(--app-glass-bg-strong);
+  backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+  -webkit-backdrop-filter: blur(var(--app-glass-blur)) saturate(var(--app-glass-saturate));
+  box-shadow: var(--app-shadow-lg);
+  color: var(--app-text);
+  font-size: .875rem;
+  animation: toast-in 420ms ease-out;
+}
+.wake-banner.is-danger { border-left-color: var(--seat-busy); }
+
 /* --------------------------------------------------------------------------
    5. 即時動態側欄（收合式）
    -------------------------------------------------------------------------- */

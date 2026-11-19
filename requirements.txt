@@ -1,9 +1,7 @@
 # Web 後端（FastAPI MVC）
 fastapi>=0.115
 uvicorn[standard]>=0.30
-jinja2>=3.1
-python-multipart>=0.0.9
-itsdangerous>=2.2
+itsdangerous>=2.2  # 學生登入 token 簽章
 
 # 資料層
 SQLAlchemy>=2.0

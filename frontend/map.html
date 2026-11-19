@@ -1,11 +1,30 @@
-{% extends "base.html" %}
-{% block title %}座位平面圖 - 自習室空位偵測系統{% endblock %}
-{% block nav %}
-<span class="navbar-text me-2"><span class="d-none d-sm-inline">學號：</span>{{ student_id }}</span>
-<a class="nav-link" href="/logout">登出</a>
-{% endblock %}
-{% block content %}
-
+<!DOCTYPE html>
+<!-- data-bs-theme 固定 dark：本系統為單一深色主題，Bootstrap 元件需此屬性才會套用深色樣式 -->
+<html lang="zh-Hant" data-bs-theme="dark">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="dark">
+  <title>座位平面圖 - 自習室空位偵測系統</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="css/app.css" rel="stylesheet">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <script src="config.js"></script>
+  <script src="js/api.js"></script>
+  <!-- 未登入不渲染頁面，直接回登入頁 -->
+  <script>App.auth.requireLogin();</script>
+</head>
+<body>
+  <nav class="navbar navbar-expand app-navbar">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="map.html">📚 自習室空位系統</a>
+      <div class="navbar-nav align-items-center ms-auto gap-2">
+        <span class="navbar-text me-2"><span class="d-none d-sm-inline">學號：</span><span id="nav-student"></span></span>
+        <a class="nav-link" href="index.html" id="logout-link">登出</a>
+      </div>
+    </div>
+  </nav>
+  <main class="container py-3">
 <!-- 常駐通知（離席警示等需要使用者處理的訊息） -->
 <div id="notification-area"></div>
 
@@ -78,7 +97,7 @@
         <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
       <div class="modal-body">
-        預約後請於 <strong>{{ checkin_deadline_minutes }} 分鐘</strong>內報到，逾期將自動釋放座位。
+        預約後請於 <strong><span id="checkin-minutes">30</span> 分鐘</strong>內報到，逾期將自動釋放座位。
       </div>
       <div class="modal-footer">
         <button class="btn btn-secondary" data-bs-dismiss="modal">取消</button>
@@ -87,9 +106,8 @@
     </div>
   </div>
 </div>
-
-{% endblock %}
-{% block scripts %}
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="/static/js/map.js"></script>
-{% endblock %}
+  </main>
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="js/map.js"></script>
+</body>
+</html>

@@ -20,6 +20,7 @@
 import argparse
 import logging
 import math
+import os
 
 logger = logging.getLogger(__name__)
 
@@ -43,20 +44,28 @@ def to_display(point, scale: float) -> tuple[int, int]:
     return (round(point[0] * scale), round(point[1] * scale))
 
 
-def save_roi(api_base: str, seat_label: str, roi) -> bool:
-    """寫入後端。roi 為四點 list，或立體框選的 {"points", "top", "floor"}（原樣送出）。"""
+def _admin_headers(admin_token: str) -> dict:
+    return {"X-Admin-Token": admin_token} if admin_token else {}
+
+
+def save_roi(api_base: str, seat_label: str, roi, admin_token: str = "") -> bool:
+    """寫入後端。roi 為四點 list，或立體框選的 {"points", "top", "floor"}（原樣送出）。
+    後端設定 ADMIN_TOKEN 時需帶管理密碼（spec: access-control）。"""
     import httpx
 
     body = roi if isinstance(roi, dict) else {"points": roi}
     try:
         res = httpx.put(f"{api_base.rstrip('/')}/api/seats/{seat_label}/roi",
-                        json=body, timeout=10.0)
+                        json=body, headers=_admin_headers(admin_token), timeout=90.0)
     except httpx.HTTPError as exc:
         logger.error("無法連線後端（%s），可改用 --out 先存成 JSON", exc)
         return False
     if res.status_code == 200:
         logger.info("座位 %s 的 ROI 已儲存: %s", seat_label, body)
         return True
+    if res.status_code == 401:
+        logger.error("管理密碼錯誤或未提供（--admin-token / ADMIN_TOKEN）")
+        return False
     logger.error("儲存失敗（%s）: %s", res.status_code, res.text)
     return False
 
@@ -234,6 +243,8 @@ def main() -> None:
                         help="座位編號，可一次列多個依序標定（例：A1 A2 A3）")
     parser.add_argument("--api", default="http://127.0.0.1:8000", help="後端 API 位址")
     parser.add_argument("--out", help="改存成本機 JSON 檔（不需啟動後端）")
+    parser.add_argument("--admin-token", default=os.getenv("ADMIN_TOKEN", ""),
+                        help="管理密碼（後端設定 ADMIN_TOKEN 時寫入 ROI 需要；預設讀同名環境變數）")
     parser.add_argument("--box", action="store_true",
                         help="立體框選：點桌面四角 + 兩支前腳落地點，ROI 取長方體外輪廓並保存桌面"
                              "（偵測端桌面優先判定使用）")
@@ -264,7 +275,7 @@ def main() -> None:
         if result is None:  # 按 q 離開
             break
         ok = (save_json_roi(args.out, seat, result) if args.out
-              else save_roi(args.api, seat, result))
+              else save_roi(args.api, seat, result, args.admin_token))
         if not ok:
             break
         existing[seat] = result

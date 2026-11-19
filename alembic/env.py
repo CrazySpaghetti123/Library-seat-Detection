@@ -19,7 +19,8 @@ import src.models  # noqa: F401  確保所有 model 已註冊至 Base.metadata
 config = context.config
 
 # 連線字串以應用程式設定為準（環境變數 DATABASE_URL）
-config.set_main_option("sqlalchemy.url", app_config.DATABASE_URL)
+# configparser 會把 % 當插值符號，URL 編碼過的密碼（如 %40）需跳脫
+config.set_main_option("sqlalchemy.url", app_config.DATABASE_URL.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.

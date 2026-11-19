@@ -1,0 +1,32 @@
+# Render Blueprint：後端（FastAPI＋WebSocket＋APScheduler）
+# 建立方式見 docs/deployment.md。密鑰一律在 Render 後台填寫，不寫進這個檔案（repo 為公開）。
+services:
+  - type: web
+    name: seat-system
+    runtime: python
+    plan: free            # 閒置 15 分鐘休眠、喚醒約 1 分鐘；單一執行個體（APScheduler 只能跑一份）
+    region: singapore     # 與 Neon 同區（AWS ap-southeast-1）
+    buildCommand: pip install -r requirements.txt
+    # 啟動前先套用資料庫 migration；Render 以 $PORT 指定埠
+    startCommand: alembic upgrade head && uvicorn src.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.13.0"
+      - key: SECRET_KEY            # 學生登入 token 簽章，由 Render 自動產生
+        generateValue: true
+      - key: DATABASE_URL          # Neon 的「一般」連線字串（不要用 -pooler）
+        sync: false
+      - key: DETECTION_API_KEY     # 偵測端金鑰
+        sync: false
+      - key: ADMIN_TOKEN           # 報表與 ROI 標定的管理密碼
+        sync: false
+      - key: ALLOWED_ORIGINS       # 前端網址（只到網域，不含 /Library-seat-Detection 路徑）
+        value: https://crazyspaghetti123.github.io
+      - key: TIMEZONE
+        value: Asia/Taipei
+      - key: OPEN_HOUR
+        value: "10"
+      - key: CLOSE_HOUR
+        value: "20"

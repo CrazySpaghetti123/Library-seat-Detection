@@ -1,0 +1,53 @@
+# 將 frontend/ 發布到 GitHub Pages（https://crazyspaghetti123.github.io/Library-seat-Detection/）
+# 需要：Settings → Pages → Source 選「GitHub Actions」，
+#       Settings → Secrets and variables → Actions → Variables 新增 API_BASE（Render 後端網址）。
+# 尚未設定 API_BASE 時整個 job 跳過，不會部署出連不到後端的前端。
+name: 部署前端到 GitHub Pages
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "frontend/**"
+      - ".github/workflows/pages.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    if: ${{ vars.API_BASE != '' }}
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 寫入後端網址
+        env:
+          API_BASE: ${{ vars.API_BASE }}
+        run: |
+          base="${API_BASE%/}"
+          case "$base" in
+            https://*) ;;
+            *) echo "::error::API_BASE 必須是 https:// 開頭的後端網址，目前為：$base"; exit 1 ;;
+          esac
+          printf '/* 由 .github/workflows/pages.yml 產生 */\nwindow.APP_CONFIG = {\n  apiBase: "%s",\n};\n' "$base" > frontend/config.js
+          cat frontend/config.js
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend
+
+      - id: deployment
+        uses: actions/deploy-pages@v4

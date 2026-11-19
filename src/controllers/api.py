@@ -3,21 +3,55 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.orm import Session
 
+from src import config
 from src.database import get_db
 from src.models.booking import Booking
 from src.models.seat import Seat, SeatStatus, SeatStatusLog
 from src.services.booking_service import BookingService
 from src.services.idle_timeout_service import IdleTimeoutService
+from src.services.auth_service import (
+    STUDENT_ID_ERROR,
+    issue_token,
+    normalize_student_id,
+    require_admin,
+    require_detection_key,
+    require_student,
+)
 from src.services.notification_service import NotificationService
 
 router = APIRouter(prefix="/api")
 
 
-def require_student(request: Request) -> str:
-    student_id = request.session.get("student_id")
+# ---- 登入、設定與健康檢查（spec: access-control / cloud-deployment）----
+
+class LoginRequest(BaseModel):
+    student_id: str
+
+
+@router.post("/auth/login")
+def login(body: LoginRequest):
+    """以學號換取 token（無密碼）。前端存於 localStorage，之後以 Authorization: Bearer 帶上。"""
+    student_id = normalize_student_id(body.student_id)
     if not student_id:
-        raise HTTPException(status_code=401, detail="請先以學號登入")
-    return student_id
+        raise HTTPException(status_code=400, detail=STUDENT_ID_ERROR)
+    return {"token": issue_token(student_id), "student_id": student_id}
+
+
+@router.get("/config")
+def public_config():
+    """前端需要的系統設定（原本由 Jinja2 模板帶入）。"""
+    return {
+        "checkin_deadline_minutes": config.CHECKIN_DEADLINE_MINUTES,
+        "open_hour": config.OPEN_HOUR,
+        "close_hour": config.CLOSE_HOUR,
+        "timezone": config.TIMEZONE,
+    }
+
+
+@router.get("/health")
+def health():
+    """喚醒與保持清醒用；刻意不碰資料庫，避免把閒置暫停的 Neon 也叫醒。"""
+    return {"ok": True}
 
 
 def seat_to_dict(seat: Seat) -> dict:
@@ -197,7 +231,7 @@ def _roi_error(body: RoiRequest) -> str | None:
     return None
 
 
-@router.put("/seats/{seat_label}/roi")
+@router.put("/seats/{seat_label}/roi", dependencies=[Depends(require_admin)])
 def set_seat_roi(seat_label: str, body: RoiRequest, db: Session = Depends(get_db)):
     """標定工具寫入座位 ROI。正式部署時應加上管理者驗證。"""
     error = _roi_error(body)
@@ -223,7 +257,7 @@ class DetectionBatch(BaseModel):
     events: list[DetectionEvent]
 
 
-@router.post("/detection/events")
+@router.post("/detection/events", dependencies=[Depends(require_detection_key)])
 def receive_detection_events(body: DetectionBatch, db: Session = Depends(get_db)):
     """接收偵測端事件批次（離線補送時一次多筆，依序處理）。"""
     results = []

@@ -6,9 +6,11 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from src.database import get_db
+from src.services.auth_service import require_admin
 from src.services.report_service import ReportService, local_day_bounds
 
-router = APIRouter(prefix="/api/reports")
+# 報表一律需要管理密碼（spec: access-control / Administrator Authentication）
+router = APIRouter(prefix="/api/reports", dependencies=[Depends(require_admin)])
 
 
 def _parse_date(value: str) -> date:

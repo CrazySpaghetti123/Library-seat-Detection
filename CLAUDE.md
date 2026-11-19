@@ -14,10 +14,11 @@ Documentation, comments, and user-facing strings are written in Traditional Chin
 pip install -r requirements.txt        # web backend
 alembic upgrade head                   # create schema (dev.db by default)
 python scripts/seed_seats.py           # seed demo seats (6 seats A1–A3/B1–B3, floor 「測試教室」; --prune drops seats outside the layout)
-uvicorn src.main:app --reload          # http://127.0.0.1:8000
+uvicorn src.main:app --reload          # http://127.0.0.1:8000 (serves frontend/ too)
 ```
 
-- `DATABASE_URL` env var switches DB: default `sqlite:///dev.db`, production `postgresql+psycopg://…`.
+- `DATABASE_URL` env var switches DB: default `sqlite:///dev.db`; `postgres://`/`postgresql://` (Neon) are auto-converted to `postgresql+psycopg://`.
+- Cloud: frontend on GitHub Pages, backend on Render free (sleeps when idle), DB on Neon — see `docs/deployment.md`, `render.yaml`, `.github/workflows/pages.yml`. Access-control env vars: `SECRET_KEY` (student token signing), `DETECTION_API_KEY` (`X-API-Key`), `ADMIN_TOKEN` (`X-Admin-Token`, ROI + reports), `ALLOWED_ORIGINS` (CORS). Unset keys = endpoint open (dev) with a startup warning. Never commit secrets: the repo is public.
 - Detection process (separate machine OK, needs `requirements-detection.txt`): `python -m src.detection.calibrate --seat A1 A2 A3 B1 B2 B3 --box` (writes box ROIs `{points, top, floor}` to the backend) then `python -m src.detection.detector --source 0 --show`. Default `--match desk-first` (each detection assigned to one seat, desk top first); `--match per-seat` restores independent per-seat matching.
 - No camera? `python scripts/simulate_detection.py A1 person_present` replays detection events against the API.
 - Accuracy evaluation on a labelled photo set: `python -m src.detection.calibrate --source <empty photo> --seat A1 A2 A3 B1 B2 B3 --box --out <dir>/rois.json` (`--box`: click 4 desk-top corners + 2 front-leg floor points, ROI = projected cuboid hull) then `python scripts/evaluate_photos.py --photos <dir> --rois <dir>/rois.json` (labels in `<dir>/labels.txt`, template `scripts/eval_shot_plan.txt`). Compares desk-first vs per-seat ground-point vs box-centre; outputs go to `eval_output/` (gitignored: contains people). `python scripts/robustness_eval.py --photos <dir>` runs split-half / bootstrap / ROI-jitter checks. Results and limitations for the report: `docs/evaluation_results.md`.
@@ -35,8 +36,8 @@ Tests use in-memory SQLite (`tests/conftest.py`); timeout tests manipulate DB ti
 
 - `src/models/` — SQLAlchemy ORM: `Seat`/`SeatStatus` (AVAILABLE/RESERVED/OCCUPIED/AWAY/MAINTENANCE), `Booking`, `SeatStatusLog`, `IdleEvent`, `Notification`. Schema changes go through Alembic (`alembic/`).
 - `src/services/` — business rules. **All seat status changes must go through `SeatStateService.transition()`** (validates against `VALID_TRANSITIONS`, writes `seat_status_logs`, fires WebSocket hooks). `BookingService` (reserve/check-in/cancel/no-show; one active booking per student), `IdleTimeoutService` (away/vacant timers; anchors persisted in DB, swept by APScheduler in `scheduler.py`), `ReportService` (usage rates from `seat_status_logs` only).
-- `src/controllers/` — thin FastAPI routers: `pages` (Jinja2 views, session login by student ID), `api` (REST + detection events), `reports`, `ws` (ConnectionManager; sync code publishes via `run_coroutine_threadsafe`).
-- `src/views/` — Jinja2 templates + static JS (map.js renders SVG floor map, reconnecting WebSocket re-fetches the full snapshot).
+- `src/controllers/` — thin FastAPI routers: `api` (REST, `/api/auth/login` student-ID → signed Bearer token, `/api/config`, `/api/health`, detection events), `reports` (admin token), `ws` (ConnectionManager, student identified by `?token=`; sync code publishes via `run_coroutine_threadsafe`). Auth helpers in `src/services/auth_service.py`.
+- `frontend/` — static views (no server templates): `index.html` login, `map.html`, `admin.html` reports; `js/api.js` wraps API base URL (`config.js`), tokens, and backend wake-up retry; map.js renders SVG floor map, reconnecting WebSocket re-fetches the full snapshot and sends a 4-minute heartbeat.
 - `src/detection/` — standalone process; talks to the backend only via HTTP (`PUT /api/seats/{label}/roi`, `POST /api/detection/events`), offline events queue to `detection_queue.jsonl`.
 - All datetimes are naive UTC (`src/utils.py:utcnow`) for SQLite/PostgreSQL parity; only SQLite+PG common SQL features are allowed.
 

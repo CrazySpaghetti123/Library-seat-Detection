@@ -24,12 +24,33 @@ def _float_env(name: str, default: float) -> float:
     return float(raw)
 
 
+def normalize_database_url(url: str) -> str:
+    """雲端 PostgreSQL（Neon 等）提供的 postgres:// 或 postgresql:// 字串改用 psycopg 驅動，
+    使用者可直接貼上服務給的連線字串（spec: cloud-deployment / Managed Database Connection）。"""
+    for prefix in ("postgres://", "postgresql://"):
+        if url.startswith(prefix):
+            return "postgresql+psycopg://" + url[len(prefix):]
+    return url
+
+
+def _list_env(name: str) -> list[str]:
+    return [v.strip().rstrip("/") for v in os.getenv(name, "").split(",") if v.strip()]
+
+
 # 開發期預設 SQLite；本機 PostgreSQL 或 DBaaS 以環境變數覆寫，例如：
 # postgresql+psycopg://user:pass@localhost:5432/seatdb
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///dev.db")
+DATABASE_URL = normalize_database_url(os.getenv("DATABASE_URL", "sqlite:///dev.db"))
 
-# Session 簽章金鑰（正式環境務必覆寫）
+# 學生登入 token 的簽章金鑰（正式環境務必覆寫；Render 部署時自動產生）
 SECRET_KEY = os.getenv("SECRET_KEY", "dev-secret-change-me")
+TOKEN_MAX_AGE_HOURS = _float_env("TOKEN_MAX_AGE_HOURS", 12)
+
+# 存取控制（spec: access-control）。未設定＝開發模式，對應端點不驗證，啟動時記錄警告
+DETECTION_API_KEY = os.getenv("DETECTION_API_KEY", "")  # 偵測端上報事件（X-API-Key）
+ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # ROI 標定與報表（X-Admin-Token）
+
+# 允許跨來源呼叫 API 的前端網址（逗號分隔，例：https://crazyspaghetti123.github.io）；未設定＝只允許同源
+ALLOWED_ORIGINS = _list_env("ALLOWED_ORIGINS")
 
 AWAY_THRESHOLD_MINUTES = _float_env("AWAY_THRESHOLD_MINUTES", 15)
 CONFIRM_WINDOW_MINUTES = _float_env("CONFIRM_WINDOW_MINUTES", 10)

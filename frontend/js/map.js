@@ -1,5 +1,8 @@
-/* 平面圖前端：全量快照 + WebSocket 增量更新（spec: floor-map-web） */
+/* 平面圖前端：全量快照 + WebSocket 增量更新（spec: floor-map-web）。
+   API 呼叫一律經 App（js/api.js）：帶登入 token、組後端網址、處理後端喚醒。 */
 (() => {
+  if (!App.auth.token()) return;  // 未登入時 map.html 已導回登入頁
+
   const COLORS = {
     AVAILABLE: "var(--seat-available)",
     OCCUPIED: "var(--seat-busy)",
@@ -190,13 +193,10 @@
 
   document.getElementById("reserve-confirm").addEventListener("click", async () => {
     if (!reserveTarget) return;
-    const res = await fetch("/api/bookings", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ seat_label: reserveTarget }),
+    const { res, data: body } = await App.json("/api/bookings", {
+      method: "POST", student: true, body: { seat_label: reserveTarget },
     });
     reserveModal.hide();
-    const body = await res.json();
     if (res.ok) {
       const deadline = new Date(body.checkin_deadline + "Z").toLocaleTimeString();
       showBanner("success", `預約成功！座位 ${body.seat_label}，請於 ${deadline} 前報到。`);
@@ -210,9 +210,9 @@
   // ---- 我的座位狀態列（報到／取消） ----
 
   async function refreshMyBooking() {
-    const res = await fetch("/api/me/booking");
+    const { res, data } = await App.json("/api/me/booking", { student: true });
     if (!res.ok) return;
-    const { booking, seat_status } = await res.json();
+    const { booking, seat_status } = data;
     const box = document.getElementById("my-booking");
     if (!booking) {
       box.classList.add("d-none");
@@ -236,8 +236,9 @@
   }
 
   async function bookingAction(id, action) {
-    const res = await fetch(`/api/bookings/${id}/${action}`, { method: "POST" });
-    const body = await res.json();
+    const { res, data: body } = await App.json(`/api/bookings/${id}/${action}`, {
+      method: "POST", student: true,
+    });
     if (!res.ok) showBanner("danger", body.detail || "操作失敗");
     refreshMyBooking();
   }
@@ -318,10 +319,9 @@
       banner.dataset.noteId = note.id;
       startCountdown(banner.querySelector(".countdown"));
       banner.querySelector("#btn-confirm-presence").onclick = async () => {
-        const res = await fetch(`/api/seats/${note.seat_id}/confirm-presence`, {
-          method: "POST",
+        const { res, data: body } = await App.json(`/api/seats/${note.seat_id}/confirm-presence`, {
+          method: "POST", student: true,
         });
-        const body = await res.json();
         if (res.ok) {
           banner.remove();
           showBanner("success", "已確認，座位保留。");
@@ -358,13 +358,13 @@
   }
 
   function markRead(id) {
-    fetch(`/api/notifications/${id}/read`, { method: "POST" });
+    App.request(`/api/notifications/${id}/read`, { method: "POST", student: true }).catch(() => {});
   }
 
   async function loadUnreadNotifications() {
-    const res = await fetch("/api/notifications");
+    const { res, data } = await App.json("/api/notifications", { student: true });
     if (!res.ok) return;
-    const { notifications } = await res.json();
+    const { notifications } = data;
     notifications.forEach(handleNotification);
   }
 
@@ -419,9 +419,9 @@
 
   async function loadEvents() {
     const list = document.getElementById("event-stream");
-    const res = await fetch(`/api/seats/events?limit=${EVENT_LIMIT}`);
+    const { res, data } = await App.json(`/api/seats/events?limit=${EVENT_LIMIT}`);
     if (!res.ok) return;
-    const { events } = await res.json();
+    const { events } = data;
     if (!events.length) {
       setStreamEmpty(list, true);
       return;
@@ -485,8 +485,8 @@
   // ---- WebSocket：增量更新＋斷線重連後重抓快照 ----
 
   async function loadSnapshot() {
-    const res = await fetch("/api/seats");
-    render(await res.json());
+    const { res, data } = await App.json("/api/seats");
+    if (res.ok) render(data);
   }
 
   function setConnState(state, text) {
@@ -495,13 +495,22 @@
     document.getElementById("ws-status-text").textContent = text;
   }
 
+  // 心跳：Render 免費方案把收到的 WebSocket 訊息計為活動，平面圖開著時後端不會休眠
+  const HEARTBEAT_MS = 4 * 60 * 1000;
+  let heartbeat = null;
+
   function connect() {
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    const sock = new WebSocket(`${proto}://${location.host}/ws/seats`);
+    // 瀏覽器無法替 WebSocket 加標頭，token 以查詢參數帶入，才能收到個人通知
+    const token = encodeURIComponent(App.auth.token() || "");
+    const sock = new WebSocket(App.wsUrl(`/ws/seats?token=${token}`));
 
     sock.onopen = async () => {
       setConnState("online", "即時連線中");
       reconnectDelay = 1000;
+      clearInterval(heartbeat);
+      heartbeat = setInterval(() => {
+        if (sock.readyState === WebSocket.OPEN) sock.send("ping");
+      }, HEARTBEAT_MS);
       await loadSnapshot(); // 重連後補償：重抓全量快照
     };
     sock.onmessage = (e) => {
@@ -524,6 +533,7 @@
       }
     };
     sock.onclose = () => {
+      clearInterval(heartbeat);
       const seconds = Math.round(reconnectDelay / 1000);
       setConnState("offline", `已斷線，${seconds} 秒後重連…`);
       setTimeout(connect, reconnectDelay);
@@ -531,8 +541,24 @@
     };
   }
 
+  // 學號、登出、報到期限（原本由伺服器模板帶入）
+  document.getElementById("nav-student").textContent = App.auth.studentId() || "";
+  document.getElementById("logout-link").addEventListener("click", (e) => {
+    e.preventDefault();
+    App.auth.logout();
+  });
+  App.config().then((cfg) => {
+    if (cfg.checkin_deadline_minutes !== undefined) {
+      document.getElementById("checkin-minutes").textContent = cfg.checkin_deadline_minutes;
+    }
+  }).catch(() => {});
+
   (async () => {
-    await loadSnapshot(); // 先有座位狀態，未讀通知才能判斷警示是否過期
+    try {
+      await loadSnapshot(); // 先有座位狀態，未讀通知才能判斷警示是否過期
+    } catch {
+      return;  // 後端 3 分鐘仍未喚醒：App 已顯示無法連線的提示
+    }
     connect();
     refreshMyBooking();
     loadUnreadNotifications();

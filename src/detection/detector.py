@@ -23,6 +23,7 @@
 import argparse
 import logging
 import math
+import os
 import time
 
 logger = logging.getLogger(__name__)
@@ -174,13 +175,15 @@ def judge_frame(rois: dict[str, dict], detections, point_in_polygon,
 
 def run(source: str, api_base: str, show: bool, hold_seconds: float,
         model_name: str = "yolov8n.pt", conf: float = 0.35,
-        person_anchor: str = ANCHOR_GROUND, match: str = MATCH_DESK_FIRST) -> None:
+        person_anchor: str = ANCHOR_GROUND, match: str = MATCH_DESK_FIRST,
+        api_key: str = "", heartbeat_minutes: float = 10,
+        open_hours: tuple[int, int] = (8, 22)) -> None:
     import cv2
     import numpy as np
     from ultralytics import YOLO
 
     from src.detection.debounce import StateDebouncer
-    from src.detection.reporter import EventReporter
+    from src.detection.reporter import EventReporter, Heartbeat
 
     rois = fetch_calibrated_seats(api_base)
     if not rois:
@@ -208,7 +211,10 @@ def run(source: str, api_base: str, show: bool, hold_seconds: float,
 
     model = YOLO(model_name)
     debouncer = StateDebouncer(hold_seconds=hold_seconds)
-    reporter = EventReporter(api_base=api_base)
+    reporter = EventReporter(api_base=api_base, api_key=api_key)
+    heartbeat = Heartbeat(reporter.client, api_base, heartbeat_minutes, *open_hours)
+    if heartbeat_minutes > 0:
+        logger.info("健康檢查心跳：開館 %d–%d 時每 %g 分鐘一次", *open_hours, heartbeat_minutes)
 
     cap = cv2.VideoCapture(int(source) if source.isdigit() else source)
     if not cap.isOpened():
@@ -263,6 +269,8 @@ def run(source: str, api_base: str, show: bool, hold_seconds: float,
                     cv2.putText(frame, text, (int(x), int(y) - 6),
                                 cv2.FONT_HERSHEY_SIMPLEX, 0.6, color, 2)
 
+            heartbeat.tick()
+
             # 每 30 秒嘗試補送離線佇列
             if time.monotonic() - last_flush > 30:
                 reporter.flush()
@@ -276,6 +284,18 @@ def run(source: str, api_base: str, show: bool, hold_seconds: float,
         cap.release()
         if show:
             cv2.destroyAllWindows()
+
+
+def _parse_open_hours(parser, raw: str | None) -> tuple[int, int]:
+    if raw is None:
+        return int(os.getenv("OPEN_HOUR", 8)), int(os.getenv("CLOSE_HOUR", 22))
+    try:
+        start, end = (int(x) for x in raw.split("-"))
+    except ValueError:
+        parser.error("--open-hours 格式為 開始-結束，例如 10-20")
+    if not (0 <= start <= 23 and 0 <= end <= 24):
+        parser.error("--open-hours 的小時需在 0–24 之間")
+    return start, end
 
 
 def parse_args(argv=None) -> argparse.Namespace:
@@ -295,7 +315,15 @@ def parse_args(argv=None) -> argparse.Namespace:
                         default=MATCH_DESK_FIRST,
                         help="偵測歸屬座位的方式：desk-first=桌面優先、每個偵測只歸一席（預設）；"
                              "per-seat=各座位獨立比對外輪廓（舊行為）")
+    parser.add_argument("--api-key", default=os.getenv("DETECTION_API_KEY", ""),
+                        help="偵測端金鑰（後端設定 DETECTION_API_KEY 時必填；預設讀同名環境變數）")
+    parser.add_argument("--heartbeat", type=float, default=10,
+                        help="開館時段每幾分鐘呼叫 /api/health 讓雲端後端保持清醒（0＝關閉）")
+    parser.add_argument("--open-hours", default=None,
+                        help="開館時段（本機時間），例如 10-20；預設讀 OPEN_HOUR／CLOSE_HOUR 環境變數，"
+                             "未設定為 8-22")
     args = parser.parse_args(argv)
+    args.open_hours = _parse_open_hours(parser, args.open_hours)
     if args.match == MATCH_DESK_FIRST and args.person_anchor == ANCHOR_CENTER:
         parser.error("--person-anchor center 只適用於 --match per-seat"
                      "（桌面優先一律以接地點比對桌面）")
@@ -308,7 +336,7 @@ def main() -> None:
     logging.basicConfig(level=logging.INFO,
                         format="%(asctime)s %(levelname)s %(message)s")
     run(args.source, args.api, args.show, args.hold, args.model, args.conf,
-        args.person_anchor, args.match)
+        args.person_anchor, args.match, args.api_key, args.heartbeat, args.open_hours)
 
 
 if __name__ == "__main__":

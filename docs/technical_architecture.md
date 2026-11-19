@@ -24,9 +24,11 @@ graph TD
 | 層 | 技術 |
 |---|---|
 | 開發語言 | Python 3.10+（本機 3.13） |
-| Web 框架 | FastAPI + Uvicorn（Controller）、Jinja2 + Bootstrap 5（View） |
+| Web 框架 | FastAPI + Uvicorn（Controller）；前端為純靜態 HTML／JS＋Bootstrap 5（View），以 REST 與 WebSocket 取資料 |
 | 資料層 | SQLAlchemy 2.x ORM + Alembic migration（Model） |
-| 資料庫 | PostgreSQL（開發期 SQLite，上線改 DBaaS——皆由 `DATABASE_URL` 切換） |
+| 資料庫 | PostgreSQL（開發期 SQLite，雲端為 Neon——皆由 `DATABASE_URL` 切換） |
+| 部署 | 前端 GitHub Pages、後端 Render 免費方案、資料庫 Neon 免費方案（見第七節） |
+| 存取控制 | 學生以學號換簽章 token（Bearer）；偵測端金鑰 `X-API-Key`；管理密碼 `X-Admin-Token` |
 | 即時推播 | 原生 WebSocket（座位廣播頻道＋學號個人通知頻道） |
 | 排程 | APScheduler（離席逾時／報到期限掃描，計時錨點存 DB） |
 | AI 模型 | YOLOv8（偵測人、背包、筆電、書本） |
@@ -37,15 +39,18 @@ graph TD
 
 ```
 src/
-├── main.py            # FastAPI 進入點（組裝 routers、排程、WebSocket 掛勾）
-├── config.py          # 環境變數設定（DATABASE_URL、計時參數）
+├── main.py            # FastAPI 進入點（組裝 routers、CORS、排程、WebSocket 掛勾；本機一併提供 frontend/）
+├── config.py          # 環境變數設定（DATABASE_URL、計時參數、金鑰、時區、允許的前端來源）
 ├── database.py        # SQLAlchemy engine / session
 ├── models/            # [M] ORM models
-├── services/          # 業務規則：狀態機、預約、逾時、通知、報表、排程
-├── controllers/       # [C] FastAPI routers：頁面、REST API、報表、WebSocket
-├── views/             # [V] Jinja2 模板 + 靜態 JS/CSS
-└── detection/         # 偵測端（獨立程序）：標定、偵測迴圈、去抖動、事件上報
+├── services/          # 業務規則：狀態機、預約、逾時、通知、報表、排程、存取控制
+├── controllers/       # [C] FastAPI routers：REST API、報表、WebSocket
+└── detection/         # 偵測端（獨立程序）：標定、偵測迴圈、去抖動、事件上報、健康檢查心跳
+frontend/              # [V] 純靜態前端：index.html（登入）、map.html、admin.html（報表）、config.js（後端網址）
 ```
+
+View 層是純靜態檔：本機由 FastAPI 以同源方式提供；雲端部署到 GitHub Pages，
+由 `config.js` 指定後端網址，以 CORS 呼叫 API。
 
 ## 四、 核心邏輯設計
 
@@ -121,6 +126,26 @@ PostgreSQL）時只需更換 `DATABASE_URL` 並執行 `alembic upgrade head`。
 ## 六、 使用率報表
 
 - 使用率 ＝（OCCUPIED＋RESERVED＋AWAY 座位時數）÷（座位數 × 開放時數，
-  預設 08:00–22:00），由 `seat_status_logs` 的狀態區間切分至小時桶計算。
+  預設 08:00–22:00，雲端設定為 10:00–20:00），由 `seat_status_logs` 的狀態區間切分至小時桶計算。
+- 時間一律以 naive UTC 存於資料庫；報表的日期、開館時段與小時桶以 `TIMEZONE`（預設 Asia/Taipei）計算，
+  只在查詢邊界換算。
 - 佔位行為統計：逾時釋放次數、平均離席時長、佔位 Top 5 座位。
-- 儀表板 `/admin/reports`（Chart.js），可匯出 CSV。
+- 儀表板 `admin.html`（Chart.js），需管理密碼，可匯出 CSV。
+
+## 七、 雲端部署
+
+| 元件 | 平台 | 說明 |
+|---|---|---|
+| 前端 | GitHub Pages | `.github/workflows/pages.yml` 以 repo 變數 `API_BASE` 寫入 `config.js` 後發布 `frontend/` |
+| 後端 | Render 免費方案 | `render.yaml`；啟動時執行 `alembic upgrade head`；單一執行個體（APScheduler 只能跑一份） |
+| 資料庫 | Neon 免費方案 | 一般連線（非 pooled）；`pool_pre_ping`＋`pool_recycle=300` 因應閒置暫停 |
+
+- **跨網域登入**：前端與後端不同網域，跨站 cookie 會被瀏覽器擋下，改用學號換取的簽章 token
+  （`itsdangerous`，12 小時），API 以 `Authorization: Bearer`、WebSocket 以 `?token=` 帶入。
+- **休眠因應**：Render 免費方案閒置 15 分鐘休眠、喚醒約 1 分鐘。前端顯示喚醒提示並自動重試；
+  平面圖每 4 分鐘送 WebSocket 心跳；偵測端在開館時段每 10 分鐘呼叫 `/api/health`（不碰資料庫）。
+  逾時計時錨點存於資料庫，休眠期間到期的事件於醒來後補處理。
+- **密鑰**：`SECRET_KEY`、`DATABASE_URL`、`DETECTION_API_KEY`、`ADMIN_TOKEN` 只設定在 Render 後台；
+  未設定金鑰時對應端點開放（本機開發），啟動時記錄警告。
+- 申請與設定步驟、免費額度估算、疑難排解見 `docs/deployment.md`。
+
