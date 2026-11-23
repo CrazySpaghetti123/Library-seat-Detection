@@ -7,4 +7,4 @@
 ## 2. 測試與驗證
 
 - [x] 2.1 測試：轉址目標含路徑與查詢字串、`/api/` 未知路徑 404、API 與 health 正常、未設定時照舊提供前端
-- [ ] 2.2 部署後確認：後端首頁轉到 github.io、`/api/health` 正常、github.io 全流程不受影響
+- [x] 2.2 部署後確認：後端首頁轉到 github.io、`/api/health` 正常、github.io 全流程不受影響
