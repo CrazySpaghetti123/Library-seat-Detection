@@ -24,6 +24,8 @@ services:
         sync: false
       - key: ALLOWED_ORIGINS       # 前端網址（只到網域，不含 /Library-seat-Detection 路徑）
         value: https://crazyspaghetti123.github.io
+      - key: FRONTEND_URL          # 前端正式網址：後端不提供網頁，開後端網址會轉到這裡
+        value: https://crazyspaghetti123.github.io/Library-seat-Detection
       - key: TIMEZONE
         value: Asia/Taipei
       - key: OPEN_HOUR

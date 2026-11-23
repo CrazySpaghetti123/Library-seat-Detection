@@ -78,6 +78,7 @@ python -c "import secrets; print(secrets.token_urlsafe(24))"
 4. 按 **Apply** 開始部署，第一次約 3～5 分鐘。
 5. 部署完成後，在服務頁面上方複製網址，例如 `https://seat-system-xxxx.onrender.com`。
 6. 用瀏覽器開 `網址/api/health`，看到 `{"ok":true}` 表示後端正常。
+   - 直接開後端網址（不加 `/api/...`）會自動轉到 github.io：後端只提供 API，網頁一律由 GitHub Pages 提供（`render.yaml` 的 `FRONTEND_URL`）。
 7. 到 **Logs** 確認**沒有**出現「未受保護」的 WARNING。有的話表示某個金鑰沒填到。
 
 之後每次 push 到 main，Render 會自動重新部署。

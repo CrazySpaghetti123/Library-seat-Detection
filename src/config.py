@@ -52,6 +52,10 @@ ADMIN_TOKEN = os.getenv("ADMIN_TOKEN", "")              # ROI 標定與報表（
 # 允許跨來源呼叫 API 的前端網址（逗號分隔，例：https://crazyspaghetti123.github.io）；未設定＝只允許同源
 ALLOWED_ORIGINS = _list_env("ALLOWED_ORIGINS")
 
+# 前端正式網址（例：https://crazyspaghetti123.github.io/Library-seat-Detection）。
+# 未設定＝本機開發，後端一併提供 frontend/；設定後後端不提供前端，非 API 網址轉址到這裡
+FRONTEND_URL = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+
 AWAY_THRESHOLD_MINUTES = _float_env("AWAY_THRESHOLD_MINUTES", 15)
 CONFIRM_WINDOW_MINUTES = _float_env("CONFIRM_WINDOW_MINUTES", 10)
 CHECKIN_DEADLINE_MINUTES = _float_env("CHECKIN_DEADLINE_MINUTES", 30)
